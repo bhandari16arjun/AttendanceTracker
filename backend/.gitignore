@@ -1,6 +1,0 @@
-*.swp
-bin
-gin-bin
-*.db
-*.env
-env
