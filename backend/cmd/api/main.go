@@ -68,6 +68,10 @@ func main() {
 
 			r.Post("/classes/{classID}/attendance-session", apiHandler.CreateAttendanceSession)
 			r.Post("/attendance/mark", apiHandler.MarkAttendance)
+
+			r.Get("/classes/{classID}/attendance", apiHandler.GetClassAttendance)
+
+			r.Get("/attendance/history", apiHandler.GetMyAttendanceHistory)
 		})
 	})
 

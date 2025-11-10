@@ -56,6 +56,26 @@ type AttendanceRecord struct {
 	Timestamp   time.Time          `bson:"timestamp"`
 }
 
+// StudentAttendanceHistory is a struct for the aggregation result for a student's history.
+type StudentAttendanceHistory struct {
+	ID            primitive.ObjectID `bson:"_id" json:"id"`
+	UserID        primitive.ObjectID `bson:"user_id" json:"userId"`
+	ClassroomID   primitive.ObjectID `bson:"classroom_id" json:"classroomId"`
+	Timestamp     time.Time          `bson:"timestamp" json:"timestamp"`
+	ClassroomInfo struct {
+		Name string `bson:"name" json:"subjectName"` // Match frontend mock data field
+		Code string `bson:"code" json:"subjectCode"`
+	} `bson:"classroomInfo" json:"classroomInfo"`
+}
+
+// ClassAttendanceSummary is a struct for the aggregation result for an instructor's view.
+type ClassAttendanceSummary struct {
+	UserID        primitive.ObjectID `bson:"_id" json:"userId"`
+	Name          string             `bson:"name" json:"name"`
+	Email         string             `bson:"email" json:"email"`
+	AttendedCount int                `bson:"attendedCount" json:"attendedCount"`
+}
+
 // ==================================
 //       Database Connection
 // ==================================
