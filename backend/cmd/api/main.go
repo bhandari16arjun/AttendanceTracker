@@ -65,6 +65,9 @@ func main() {
 			r.Post("/classes/join", apiHandler.JoinClass)
 
 			r.Post("/classes/{classID}/leave", apiHandler.LeaveClass)
+
+			r.Post("/classes/{classID}/attendance-session", apiHandler.CreateAttendanceSession)
+			r.Post("/attendance/mark", apiHandler.MarkAttendance)
 		})
 	})
 
