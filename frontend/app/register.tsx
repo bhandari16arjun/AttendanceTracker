@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, Image, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Camera, Lock, User, Eye, EyeOff, CheckCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cssInterop } from 'nativewind';
 import { useRouter } from 'expo-router';
+import { api } from '@/services/api';
 
 cssInterop(LinearGradient, { className: 'style' });
 
@@ -16,11 +17,12 @@ export default function RegisterScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [faceRegistered, setFaceRegistered] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleFaceRegistration = () => {
     Alert.alert(
       "Face Registration",
-      "Please look at the camera to register your face",
+      "This is a mock feature. In a real app, this would open the camera.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -34,25 +36,36 @@ export default function RegisterScreen() {
     );
   };
 
-  const handleRegistration = () => {
+  const handleRegistration = async () => {
     if (!name || !email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
-    
     if (password !== confirmPassword) {
       Alert.alert("Error", "Passwords do not match");
       return;
     }
-    
     if (!faceRegistered) {
-      Alert.alert("Error", "Face registration is required to complete registration");
+      Alert.alert("Error", "Face registration is required");
       return;
     }
     
-    // In a real app, register user here
-    Alert.alert("Success", "Registration completed! You can now log in.");
-    router.push('/login');
+    setIsLoading(true);
+    try {
+      const response = await api.register({ name, email, password });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Registration failed. Please try again.');
+      }
+
+      Alert.alert("Success", "Registration completed! You can now log in.");
+      router.push('/login');
+    } catch (error: any) {
+      Alert.alert("Registration Error", error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -90,6 +103,7 @@ export default function RegisterScreen() {
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
+              autoCapitalize='none'
               className="flex-1 ml-3 text-[#2C3E50] font-medium"
             />
           </View>
@@ -133,13 +147,16 @@ export default function RegisterScreen() {
             {faceRegistered && <CheckCircle size={20} color="white" className="ml-2" />}
           </TouchableOpacity>
           
-          <TouchableOpacity 
-            className={`rounded-xl p-4 items-center ${faceRegistered ? 'bg-[#26d0ce]' : 'bg-gray-400'}`}
-            onPress={handleRegistration}
-            disabled={!faceRegistered}
-          >
-            <Text className="text-white font-bold text-lg">Register</Text>
-          </TouchableOpacity>
+            <TouchableOpacity 
+          className={`rounded-xl p-4 items-center ${(!faceRegistered || isLoading) ? 'bg-gray-400' : 'bg-[#1a2980]'}`}
+          onPress={handleRegistration}
+          disabled={!faceRegistered || isLoading}
+        >
+          {isLoading 
+            ? <ActivityIndicator color="white" /> 
+            : <Text className="text-white font-bold text-lg">Register</Text>
+          }
+        </TouchableOpacity>
         </View>
         
         <View className="flex-row justify-center mt-4">

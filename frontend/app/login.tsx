@@ -1,23 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, Image, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Camera, Lock, User, Eye, EyeOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cssInterop } from 'nativewind';
 import { useRouter } from 'expo-router';
+import { api } from '@/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 cssInterop(LinearGradient, { className: 'style' });
-
-type AuthMethod = 'face' | 'password';
-
-const authenticateUser = (method: AuthMethod, password?: string): boolean => {
-  if (method === 'face') {
-    return true;
-  }
-  if (method === 'password' && password === '123456') {
-    return true;
-  }
-  return false;
-};
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -27,6 +17,7 @@ export default function LoginScreen() {
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutTime, setLockoutTime] = useState(0);
   const [isLockedOut, setIsLockedOut] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (lockoutTime > 0) {
@@ -46,28 +37,6 @@ export default function LoginScreen() {
     }
   }, [lockoutTime]);
 
-  const handleFaceAuth = () => {
-    if (isLockedOut) return;
-    const success = authenticateUser('face');
-    if (success) {
-      setFailedAttempts(0);
-      router.push('/home');
-    } else {
-      handleFailedAttempt();
-    }
-  };
-
-  const handlePasswordAuth = () => {
-    if (isLockedOut) return;
-    const success = authenticateUser('password', password);
-    if (success) {
-      setFailedAttempts(0);
-      router.push('/home');
-    } else {
-      handleFailedAttempt();
-    }
-  };
-
   const handleFailedAttempt = () => {
     const newAttempts = failedAttempts + 1;
     setFailedAttempts(newAttempts);
@@ -77,9 +46,36 @@ export default function LoginScreen() {
       setLockoutTime(penalty);
       setFailedAttempts(0);
       Alert.alert("Too many failed attempts", `Please wait ${penalty} seconds before trying again.`);
-    } else {
-      Alert.alert("Authentication Failed", `Invalid credentials. ${5 - newAttempts} attempts remaining.`);
     }
+  };
+
+  const handlePasswordAuth = async () => {
+    if (isLockedOut || isLoading) return;
+    setIsLoading(true);
+
+    try {
+      const response = await api.login({ email, password });
+      if (!response.ok) {
+        handleFailedAttempt();
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Invalid credentials');
+      }
+
+      const data = await response.json();
+      await AsyncStorage.setItem('userToken', data.token);
+
+      setFailedAttempts(0);
+      router.replace('/home');
+    } catch (error: any) {
+      Alert.alert("Login Failed", error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFaceAuth = () => {
+    if (isLockedOut) return;
+    Alert.alert("Face Auth", "This feature is not yet implemented.");
   };
 
   return (
@@ -114,6 +110,7 @@ export default function LoginScreen() {
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
+              autoCapitalize="none"
               className="flex-1 ml-3 text-[#2C3E50]"
             />
           </View>
@@ -135,9 +132,12 @@ export default function LoginScreen() {
           <TouchableOpacity 
             className="bg-[#3498DB] rounded-xl p-4 items-center mb-4 shadow"
             onPress={handlePasswordAuth}
-            disabled={isLockedOut}
+            disabled={isLockedOut || isLoading}
           >
-            <Text className="text-white font-bold text-lg">Sign In with Password</Text>
+            {isLoading
+              ? <ActivityIndicator color="white" />
+              : <Text className="text-white font-bold text-lg">Sign In with Password</Text>
+            }
           </TouchableOpacity>
           
           <View className="flex-row items-center my-4">
