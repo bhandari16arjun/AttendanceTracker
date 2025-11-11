@@ -17,20 +17,15 @@ import (
 // ==================================
 //        Data Models (Structs)
 // ==================================
-// These structs define the shape of our documents in MongoDB.
-// `bson` tags map struct fields to document fields.
-// `json` tags control how the data is serialized when sent back to the frontend.
 
-// User represents a user document in the "users" collection.
 type User struct {
 	ID           primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
 	Name         string               `bson:"name" json:"name"`
 	Email        string               `bson:"email" json:"email"`
-	Password     string               `bson:"password" json:"-"` // The "-" tag prevents this from ever being sent in JSON responses.
+	Password     string               `bson:"password" json:"-"`
 	ClassroomIDs []primitive.ObjectID `bson:"classroom_ids" json:"classroomIds"`
 }
 
-// Classroom represents a classroom document in the "classrooms" collection.
 type Classroom struct {
 	ID           primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
 	Name         string               `bson:"name" json:"name"`
@@ -39,16 +34,14 @@ type Classroom struct {
 	StudentIDs   []primitive.ObjectID `bson:"student_ids" json:"studentIds"`
 }
 
-// AttendanceSession represents a temporary token used to start an attendance check.
-// These documents are automatically deleted by MongoDB thanks to the TTL index.
 type AttendanceSession struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
 	Token       string             `bson:"token"`
 	ClassroomID primitive.ObjectID `bson:"classroom_id"`
-	CreatedAt   time.Time          `bson:"created_at"` // This field is used by the TTL index.
+	// CORRECTED: Added the bson tag to match the TTL index
+	CreatedAt time.Time `bson:"created_at"`
 }
 
-// AttendanceRecord represents a single student's attendance for a class on a specific date.
 type AttendanceRecord struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
 	UserID      primitive.ObjectID `bson:"user_id"`
@@ -56,19 +49,17 @@ type AttendanceRecord struct {
 	Timestamp   time.Time          `bson:"timestamp"`
 }
 
-// StudentAttendanceHistory is a struct for the aggregation result for a student's history.
 type StudentAttendanceHistory struct {
 	ID            primitive.ObjectID `bson:"_id" json:"id"`
 	UserID        primitive.ObjectID `bson:"user_id" json:"userId"`
 	ClassroomID   primitive.ObjectID `bson:"classroom_id" json:"classroomId"`
 	Timestamp     time.Time          `bson:"timestamp" json:"timestamp"`
 	ClassroomInfo struct {
-		Name string `bson:"name" json:"subjectName"` // Match frontend mock data field
+		Name string `bson:"name" json:"subjectName"`
 		Code string `bson:"code" json:"subjectCode"`
 	} `bson:"classroomInfo" json:"classroomInfo"`
 }
 
-// ClassAttendanceSummary is a struct for the aggregation result for an instructor's view.
 type ClassAttendanceSummary struct {
 	UserID        primitive.ObjectID `bson:"_id" json:"userId"`
 	Name          string             `bson:"name" json:"name"`
@@ -80,23 +71,18 @@ type ClassAttendanceSummary struct {
 //       Database Connection
 // ==================================
 
-// Connect opens a connection to the MongoDB database and ensures necessary indexes are created.
 func Connect(uri, dbName string) (*mongo.Database, error) {
-	// Use the SetServerAPIOptions() method to set the Stable API version
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	clientOptions := options.Client().ApplyURI(uri).SetServerAPIOptions(serverAPI)
 
-	// Set a timeout for the connection attempt
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Connect to MongoDB
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
 
-	// Ping the primary node to verify the connection.
 	if err := client.Ping(ctx, nil); err != nil {
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
@@ -104,23 +90,17 @@ func Connect(uri, dbName string) (*mongo.Database, error) {
 	log.Println("MongoDB connection established")
 	db := client.Database(dbName)
 
-	// --- Ensure TTL Index for Attendance Sessions ---
-	// This is a critical setup step for our attendance flow.
-	// It creates an index that automatically deletes documents from the
-	// 'attendance_sessions' collection 60 seconds after their 'created_at' time.
 	sessionsCollection := db.Collection("attendance_sessions")
 	ttlIndex := mongo.IndexModel{
-		Keys:    bson.D{{Key: "created_at", Value: 1}},     // Index on the CreatedAt field
-		Options: options.Index().SetExpireAfterSeconds(60), // Documents expire after 60 seconds
+		Keys:    bson.D{{Key: "created_at", Value: 1}},
+		Options: options.Index().SetExpireAfterSeconds(60),
 	}
 
-	// CreateOne will only create the index if it doesn't already exist.
 	_, err = sessionsCollection.Indexes().CreateOne(context.Background(), ttlIndex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TTL index for attendance_sessions: %w", err)
 	}
 	log.Println("TTL index for 'attendance_sessions' collection ensured.")
-	// ---------------------------------------------
 
 	return db, nil
 }

@@ -7,3 +7,11 @@ export interface Classroom {
   instructorId: string;
   studentIds: string[];
 }
+
+// NEW TYPE
+export interface AttendanceSummary {
+  userId: string;
+  name: string;
+  email: string;
+  attendedCount: number;
+}
