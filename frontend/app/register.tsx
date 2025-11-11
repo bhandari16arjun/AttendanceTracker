@@ -1,3 +1,5 @@
+// app/register.tsx (with debugging logs)
+
 import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Camera, Lock, User, Eye, EyeOff, CheckCircle } from 'lucide-react-native';
@@ -37,6 +39,8 @@ export default function RegisterScreen() {
   };
 
   const handleRegistration = async () => {
+    console.log('--- Attempting Registration ---'); // DEBUG LOG 1
+
     if (!name || !email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all fields");
       return;
@@ -52,22 +56,42 @@ export default function RegisterScreen() {
     
     setIsLoading(true);
     try {
-      const response = await api.register({ name, email, password });
+      const registrationData = { name, email, password };
+      console.log('Sending data to backend:', registrationData); // DEBUG LOG 2
+
+      const response = await api.register(registrationData);
+
+      console.log('Backend response status:', response.status); // DEBUG LOG 3
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Backend error response:', errorData); // DEBUG LOG 4
         throw new Error(errorData.error || 'Registration failed. Please try again.');
       }
 
+      const successData = await response.json();
+      console.log('Backend success response:', successData); // DEBUG LOG 5
+
       Alert.alert("Success", "Registration completed! You can now log in.");
       router.push('/login');
+
     } catch (error: any) {
-      Alert.alert("Registration Error", error.message);
+      console.error('An error occurred in handleRegistration:', error); // DEBUG LOG 6
+      // Check if it's a network error
+      if (error.message.includes('Network request failed')) {
+         Alert.alert(
+           "Network Error", 
+           "Could not connect to the server. Please check your network and ensure the backend server is running and accessible."
+         );
+      } else {
+         Alert.alert("Registration Error", error.message);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
+  // ... (the rest of your return JSX is unchanged)
   return (
     <LinearGradient 
       colors={['#f0f2f5', '#e1e5ea']} 
@@ -77,7 +101,7 @@ export default function RegisterScreen() {
         <View className="mb-8 items-center">
           <View className="bg-white p-4 rounded-full mb-4" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 25, elevation: 10 }}>
             <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1573496358961-3c82861ab8f4?w=200&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTF8fEJ1c2luZXNzd29tYW4lMjBwcm9mZXNzaW9uYWwlMjBleGVjdXRpdmV8ZW58MHx8MHx8fDA%3D' }}
+              source={{ uri: 'https://images.unsplash.com/photo-1573496358961-3c82861ab8f4?w=200&auto-format&fit-crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTF8fEJ1c2luZXNzd29tYW4lMjBwcm9mZXNzaW9uYWwlMjBleGVjdXRpdmV8ZW58MHx8MHx8fDA%3D' }}
               className="w-24 h-24 rounded-full"
             />
           </View>

@@ -66,6 +66,7 @@
     "expo-system-ui": "6.0.7",
     "expo-web-browser": "15.0.8",
     "jest-expo": "54.0.12",
+    "jwt-decode": "^4.0.0",
     "lucide-react-native": "0.523.0",
     "nativewind": "^4.1.23",
     "react": "^19.1.0",
