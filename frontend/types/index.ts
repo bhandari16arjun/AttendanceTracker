@@ -8,10 +8,21 @@ export interface Classroom {
   studentIds: string[];
 }
 
-// NEW TYPE
 export interface AttendanceSummary {
   userId: string;
-  name: string;
+  name:string;
   email: string;
   attendedCount: number;
+}
+
+// NEW TYPE
+export interface AttendanceHistoryRecord {
+  id: string;
+  userId: string;
+  classroomId: string;
+  timestamp: string; // ISO date string
+  classroomInfo: {
+    subjectName: string;
+    subjectCode: string;
+  };
 }

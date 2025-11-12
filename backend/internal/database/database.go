@@ -38,14 +38,14 @@ type AttendanceSession struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
 	Token       string             `bson:"token"`
 	ClassroomID primitive.ObjectID `bson:"classroom_id"`
-	// CORRECTED: Added the bson tag to match the TTL index
-	CreatedAt time.Time `bson:"created_at"`
+	CreatedAt   time.Time          `bson:"created_at"`
 }
 
 type AttendanceRecord struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
 	UserID      primitive.ObjectID `bson:"user_id"`
 	ClassroomID primitive.ObjectID `bson:"classroom_id"`
+	SessionID   primitive.ObjectID `bson:"session_id"` // NEW: Link to the session
 	Timestamp   time.Time          `bson:"timestamp"`
 }
 
@@ -90,17 +90,32 @@ func Connect(uri, dbName string) (*mongo.Database, error) {
 	log.Println("MongoDB connection established")
 	db := client.Database(dbName)
 
+	// --- Ensure TTL Index for Attendance Sessions ---
 	sessionsCollection := db.Collection("attendance_sessions")
 	ttlIndex := mongo.IndexModel{
 		Keys:    bson.D{{Key: "created_at", Value: 1}},
 		Options: options.Index().SetExpireAfterSeconds(60),
 	}
-
 	_, err = sessionsCollection.Indexes().CreateOne(context.Background(), ttlIndex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TTL index for attendance_sessions: %w", err)
 	}
 	log.Println("TTL index for 'attendance_sessions' collection ensured.")
+
+	// --- NEW: Ensure Unique Index for Attendance Records ---
+	recordsCollection := db.Collection("attendance_records")
+	uniqueIndex := mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "user_id", Value: 1},
+			{Key: "session_id", Value: 1},
+		},
+		Options: options.Index().SetUnique(true),
+	}
+	_, err = recordsCollection.Indexes().CreateOne(context.Background(), uniqueIndex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create unique index for attendance_records: %w", err)
+	}
+	log.Println("Unique index for 'attendance_records' collection ensured.")
 
 	return db, nil
 }

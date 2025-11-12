@@ -1,3 +1,5 @@
+// File: internal/handler/attendance.go
+
 package handler
 
 import (
@@ -37,7 +39,6 @@ func (h *APIHandler) CreateAttendanceSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Verify the user is actually the instructor of this class
 	classroomsCollection := h.DB.Collection("classrooms")
 	count, err := classroomsCollection.CountDocuments(context.TODO(), bson.M{"_id": classID, "instructor_id": instructorID})
 	if err != nil || count == 0 {
@@ -45,19 +46,19 @@ func (h *APIHandler) CreateAttendanceSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Generate and store the session token
-	token, err := generateSecureToken(16) // 32 characters long
+	session := database.AttendanceSession{
+		ID:          primitive.NewObjectID(),
+		Token:       "", // Will be generated next
+		ClassroomID: classID,
+		CreatedAt:   time.Now(),
+	}
+	// Generate token that includes session ID for better traceability if needed
+	token, err := generateSecureToken(16)
 	if err != nil {
 		http.Error(w, `{"error": "Failed to generate session token"}`, http.StatusInternalServerError)
 		return
 	}
-
-	session := database.AttendanceSession{
-		ID:          primitive.NewObjectID(),
-		Token:       token,
-		ClassroomID: classID,
-		CreatedAt:   time.Now(),
-	}
+	session.Token = token
 
 	sessionsCollection := h.DB.Collection("attendance_sessions")
 	_, err = sessionsCollection.InsertOne(context.TODO(), session)
@@ -83,7 +84,6 @@ func (h *APIHandler) MarkAttendance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Find the session token. If it's expired, it won't be found.
 	sessionsCollection := h.DB.Collection("attendance_sessions")
 	var session database.AttendanceSession
 	err := sessionsCollection.FindOne(context.TODO(), bson.M{"token": req.AttendanceToken}).Decode(&session)
@@ -92,7 +92,6 @@ func (h *APIHandler) MarkAttendance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Verify student is enrolled in the class associated with the token
 	classroomsCollection := h.DB.Collection("classrooms")
 	count, err := classroomsCollection.CountDocuments(context.TODO(), bson.M{"_id": session.ClassroomID, "student_ids": studentID})
 	if err != nil || count == 0 {
@@ -100,31 +99,30 @@ func (h *APIHandler) MarkAttendance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Record the attendance
 	attendanceCollection := h.DB.Collection("attendance_records")
 	newRecord := database.AttendanceRecord{
 		ID:          primitive.NewObjectID(),
 		UserID:      studentID,
 		ClassroomID: session.ClassroomID,
+		SessionID:   session.ID, // MODIFIED: Store the session ID
 		Timestamp:   time.Now(),
 	}
 
 	_, err = attendanceCollection.InsertOne(context.TODO(), newRecord)
 	if err != nil {
+		// This will now catch the duplicate key error from our unique index
+		if mongo.IsDuplicateKeyError(err) {
+			http.Error(w, `{"error": "Attendance already marked for this session"}`, http.StatusConflict) // 409 Conflict
+			return
+		}
 		http.Error(w, `{"error": "Failed to record attendance"}`, http.StatusInternalServerError)
 		return
 	}
-
-	// Optional: Immediately delete the session token so it can't be reused,
-	// even before the TTL expires.
-	sessionsCollection.DeleteOne(context.TODO(), bson.M{"_id": session.ID})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Attendance marked successfully"})
 }
-
-// ... (at the end of the file)
 
 // GetMyAttendanceHistory retrieves all attendance records for the logged-in user.
 func (h *APIHandler) GetMyAttendanceHistory(w http.ResponseWriter, r *http.Request) {
@@ -133,20 +131,15 @@ func (h *APIHandler) GetMyAttendanceHistory(w http.ResponseWriter, r *http.Reque
 
 	attendanceCollection := h.DB.Collection("attendance_records")
 
-	// Aggregation pipeline to get records and join with classroom info
 	pipeline := mongo.Pipeline{
-		// Stage 1: Match records for the current user
 		{{Key: "$match", Value: bson.M{"user_id": userID}}},
-		// Stage 2: Sort by most recent first
 		{{Key: "$sort", Value: bson.M{"timestamp": -1}}},
-		// Stage 3: "Join" with the classrooms collection
 		{{Key: "$lookup", Value: bson.M{
 			"from":         "classrooms",
 			"localField":   "classroom_id",
 			"foreignField": "_id",
 			"as":           "classroomInfo",
 		}}},
-		// Stage 4: Deconstruct the classroomInfo array (it will have 1 element)
 		{{Key: "$unwind", Value: "$classroomInfo"}},
 	}
 
@@ -167,10 +160,7 @@ func (h *APIHandler) GetMyAttendanceHistory(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(results)
 }
 
-// ... (at the end of the file)
-
 // GetClassAttendance retrieves a summary of attendance for all students in a class.
-// This is an instructor-only endpoint.
 func (h *APIHandler) GetClassAttendance(w http.ResponseWriter, r *http.Request) {
 	instructorIDHex, _ := r.Context().Value(UserIDContextKey).(string)
 	instructorID, _ := primitive.ObjectIDFromHex(instructorIDHex)
@@ -182,7 +172,6 @@ func (h *APIHandler) GetClassAttendance(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Authorization: Verify the user is the instructor of this class
 	classroomsCollection := h.DB.Collection("classrooms")
 	count, err := classroomsCollection.CountDocuments(context.TODO(), bson.M{"_id": classID, "instructor_id": instructorID})
 	if err != nil || count == 0 {
@@ -192,25 +181,19 @@ func (h *APIHandler) GetClassAttendance(w http.ResponseWriter, r *http.Request) 
 
 	attendanceCollection := h.DB.Collection("attendance_records")
 
-	// Aggregation pipeline to group by student and count attendance
 	pipeline := mongo.Pipeline{
-		// Stage 1: Match records for this class only
 		{{Key: "$match", Value: bson.M{"classroom_id": classID}}},
-		// Stage 2: Group by user ID and count the number of records
 		{{Key: "$group", Value: bson.M{
 			"_id":           "$user_id",
 			"attendedCount": bson.M{"$sum": 1},
 		}}},
-		// Stage 3: "Join" with the users collection to get student details
 		{{Key: "$lookup", Value: bson.M{
 			"from":         "users",
 			"localField":   "_id",
 			"foreignField": "_id",
 			"as":           "studentInfo",
 		}}},
-		// Stage 4: Deconstruct the studentInfo array
 		{{Key: "$unwind", Value: "$studentInfo"}},
-		// Stage 5: Project the final shape
 		{{Key: "$project", Value: bson.M{
 			"_id":           1,
 			"name":          "$studentInfo.name",
