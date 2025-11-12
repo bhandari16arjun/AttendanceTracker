@@ -1,3 +1,5 @@
+// File: internal/handler/user.go
+
 package handler
 
 import (
@@ -40,7 +42,6 @@ func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	usersCollection := h.DB.Collection("users")
 
-	// Check if user already exists
 	count, err := usersCollection.CountDocuments(context.TODO(), bson.M{"email": req.Email})
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -99,7 +100,8 @@ func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenString, err := auth.GenerateJWT(user.ID.Hex(), h.JWT_Secret)
+	// MODIFIED: Pass user.Name to the GenerateJWT function
+	tokenString, err := auth.GenerateJWT(user.ID.Hex(), user.Name, h.JWT_Secret)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return

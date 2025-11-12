@@ -1,15 +1,14 @@
-// app/home.tsx (With a custom modal for joining classes)
+// File: app/home.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { View, Text, TouchableOpacity, ScrollView, Alert, Image, Modal, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { 
   Plus, QrCode, Users, BookOpen, BarChart2,
-  User, LogOut, XCircle, X, Loader2
+  User, LogOut, XCircle, X
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cssInterop } from 'nativewind';
-
 import { useAuth } from '@/app/context/AuthContext';
 import { api } from '@/services/api';
 import { Classroom } from '@/types';
@@ -18,7 +17,6 @@ cssInterop(LinearGradient, {
   className: 'style',
 });
 
-// A small component to represent an empty state
 const EmptyState = ({ icon, title, message, actionTitle, onActionPress }: any) => (
   <View className="bg-white rounded-2xl p-6 items-center justify-center">
     {icon}
@@ -38,7 +36,7 @@ const EmptyState = ({ icon, title, message, actionTitle, onActionPress }: any) =
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, userName } = useAuth(); // MODIFIED
 
   const [isLoading, setIsLoading]              = useState(true);
   const [isRefreshing, setIsRefreshing]        = useState(false);
@@ -46,13 +44,11 @@ export default function HomeScreen() {
   const [currentTime, setCurrentTime]          = useState(new Date());
   const [showLogoutMenu, setShowLogoutMenu]    = useState(false);
   
-  // States for the 'Create Class' modal
   const [showCreateClassModal, setShowCreateClassModal] = useState(false);
   const [newClassName, setNewClassName]        = useState('');
   const [newClassCode, setNewClassCode]        = useState('');
   const [isCreating, setIsCreating]            = useState(false);
 
-  // NEW: States for our custom 'Join Class' modal
   const [showJoinClassModal, setShowJoinClassModal] = useState(false);
   const [joinClassCode, setJoinClassCode]        = useState('');
   const [isJoining, setIsJoining]                = useState(false);
@@ -137,12 +133,10 @@ export default function HomeScreen() {
     }
   };
 
-  // MODIFIED: This now opens our custom modal
   const handleJoinClassroom = () => {
     setShowJoinClassModal(true);
   };
   
-  // NEW: This is the submission logic for the new modal
   const handleJoinClassSubmit = async () => {
     if (!joinClassCode.trim()) {
       Alert.alert("Error", "Please enter a valid classroom code.");
@@ -166,17 +160,16 @@ export default function HomeScreen() {
     }
   };
 
-
   const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const formatDate = (date: Date) => date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
   
   return (
     <View className="flex-1 bg-gray-100">
-      <LinearGradient colors={['#3498DB', '#2C3E50']} >
+      <LinearGradient colors={['#3498DB', '#2C3E50']}>
         <View className="flex-row justify-between items-center p-6 pt-12 pb-6">
           <View>
             <Text className="text-white text-2xl font-bold">Welcome,</Text>
-            <Text className="text-white text-lg opacity-90">Student/Instructor</Text>
+            <Text className="text-white text-lg opacity-90">{userName || 'User'}</Text>
           </View>
           <View className="relative">
             <TouchableOpacity className="bg-white/20 p-3 rounded-full" onPress={() => setShowLogoutMenu(!showLogoutMenu)}>
@@ -198,7 +191,7 @@ export default function HomeScreen() {
         </View>
       </LinearGradient>
       
-      <ScrollView /* ... Main content ... */
+      <ScrollView
         className="flex-1 p-4"
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
       >
@@ -249,7 +242,6 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Create Class Modal */}
       <Modal animationType="slide" transparent={true} visible={showCreateClassModal} onRequestClose={() => setShowCreateClassModal(false)}>
         <View className="flex-1 justify-center items-center bg-black/50">
           <View className="bg-white rounded-2xl w-11/12 max-w-md p-6">
@@ -272,7 +264,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* NEW: Join Class Modal */}
       <Modal
         animationType="slide"
         transparent={true}
