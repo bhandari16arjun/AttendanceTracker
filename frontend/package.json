@@ -48,6 +48,7 @@
     "@gluestack-ui/tooltip": "^0.1.38",
     "@legendapp/motion": "2.4.0",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/bottom-tabs": "7.4.7",
     "@react-navigation/native": "7.1.17",
     "babel-plugin-module-resolver": "5.0.2",
