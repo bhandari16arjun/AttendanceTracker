@@ -1,14 +1,17 @@
 # Full-Stack Attendance Tracker
 
-This is a complete full-stack mobile application for tracking attendance, built with a Go backend and a React Native (Expo) frontend. The system allows instructors to create classes and generate time-sensitive QR codes for attendance sessions. Students can join classes and mark their attendance by scanning these QR codes, with a mock face authentication step for added security.
+This is a complete full-stack mobile application for tracking attendance, built with a Go backend and a React Native (Expo) frontend. The system allows instructors to create classes and generate time-sensitive QR codes for attendance sessions. Students can join classes and mark their attendance by scanning these QR codes.
+
+A key feature is its **offline capability**: if a student has a poor internet connection, their attendance is saved locally and automatically synced to the server once the connection is restored.
 
 ## Features
 
-- **User Authentication**: Secure JWT-based registration and login for students and instructors.
+- **Offline-First Attendance**: Students can reliably mark attendance even with a poor or non-existent internet connection. Records are saved locally and synced automatically.
+- **User Authentication**: Secure JWT-based registration and login, with personalized welcome messages.
 - **Classroom Management**: Instructors can create classes with unique codes. Students can join or leave classes using these codes.
 - **Dynamic QR Code Generation**: Instructors can initiate a secure attendance session, which generates a QR code that automatically refreshes every 30 seconds.
 - **Secure QR Code Scanning**: Students mark attendance by scanning the QR code. The backend prevents duplicate scans for the same session.
-- **Attendance History**: Students can view a complete history of their attendance records across all classes.
+- **Attendance History**: Students can view a complete, real-time history of their attendance records across all classes.
 - **Instructor Dashboard**: Instructors can view a list of students enrolled in their class and see a summary of their attendance counts.
 
 ## Tech Stack
@@ -25,6 +28,8 @@ This is a complete full-stack mobile application for tracking attendance, built 
 - **Routing**: Expo Router (file-based routing)
 - **Styling**: NativeWind (Tailwind CSS for React Native)
 - **Component Library**: Gluestack UI (headless, themeable components)
+- **State Management**: React Context for global auth state and offline queue synchronization.
+- **Offline Capabilities**: `AsyncStorage` for queueing, `@react-native-community/netinfo` for network detection.
 - **QR Code Generation**: `react-native-qrcode-svg`
 - **QR Code Scanning**: `expo-camera`
 - **Icons**: `lucide-react-native`
@@ -47,7 +52,7 @@ Before you begin, ensure you have the following installed:
 
 2.  **Set up the Backend:**
     - Navigate to the `backend` directory: `cd backend`
-    - Create a `.env` file by copying the example: `cp .env.example .env` (or create it manually).
+    - Create a `.env` file if it doesn't exist.
     - Edit the `.env` file with your credentials:
       ```env
       MONGO_URI="your_mongodb_connection_string"
