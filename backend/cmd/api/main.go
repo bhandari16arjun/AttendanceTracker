@@ -61,8 +61,18 @@ func main() {
 
 			// Classroom Routes
 			r.Post("/classes", apiHandler.CreateClass)
-			r.Get("/classes", apiHandler.GetMyClasses)
 			r.Post("/classes/join", apiHandler.JoinClass)
+
+			// New routes for enrolled (student) and taught (instructor) classes
+			r.Get("/classes/enrolled", apiHandler.GetMyEnrolledClasses)
+			r.Get("/classes/taught", apiHandler.GetMyTaughtClasses)
+			
+			// New route for detailed student attendance in a class
+			r.Get("/classes/{classID}/students/{userID}/attendance", apiHandler.GetStudentClassAttendanceDetails)
+
+			// Lecture routes
+			r.Post("/classes/{classID}/lectures", apiHandler.CreateLecture)
+			r.Get("/classes/{classID}/lectures", apiHandler.GetLecturesForClass)
 
 			// r.Post("/classes/{classID}/leave", apiHandler.LeaveClass)
 

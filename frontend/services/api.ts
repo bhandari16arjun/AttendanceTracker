@@ -49,8 +49,14 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  getMyClasses: async () => {
-    return fetch(`${API_BASE_URL}/classes`, {
+  getMyEnrolledClasses: async () => {
+    return fetch(`${API_BASE_URL}/classes/enrolled`, {
+      method: 'GET',
+      headers: await getAuthHeaders(),
+    });
+  },
+  getMyTaughtClasses: async () => {
+    return fetch(`${API_BASE_URL}/classes/taught`, {
       method: 'GET',
       headers: await getAuthHeaders(),
     });
@@ -65,6 +71,21 @@ export const api = {
   leaveClass: async (classID: string) => {
     return fetch(`${API_BASE_URL}/classes/${classID}/leave`, {
       method: 'POST',
+      headers: await getAuthHeaders(),
+    });
+  },
+
+  // --- LECTURES ---
+  createLecture: async (classId: string) => {
+    return fetch(`${API_BASE_URL}/classes/${classId}/lectures`, {
+      method: 'POST',
+      headers: await getAuthHeaders(),
+      // No body needed as per the current backend implementation
+    });
+  },
+  getLecturesForClass: async (classId: string) => {
+    return fetch(`${API_BASE_URL}/classes/${classId}/lectures`, {
+      method: 'GET',
       headers: await getAuthHeaders(),
     });
   },
@@ -91,6 +112,12 @@ export const api = {
   },
   getMyAttendanceHistory: async () => {
     return fetch(`${API_BASE_URL}/attendance/history`, {
+      method: 'GET',
+      headers: await getAuthHeaders(),
+    });
+  },
+  getStudentClassAttendanceDetails: async (classId: string, userId: string) => {
+    return fetch(`${API_BASE_URL}/classes/${classId}/students/${userId}/attendance`, {
       method: 'GET',
       headers: await getAuthHeaders(),
     });

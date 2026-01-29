@@ -1,50 +1,52 @@
 // app/activities.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, Alert, ActivityIndicator, RefreshControl } from 'react-native';
-import { ArrowLeft, Calendar, Clock, BookOpen, CheckCircle } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, RefreshControl, TextInput, StyleSheet } from 'react-native';
+import { ArrowLeft, BookOpen, Search, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cssInterop } from 'nativewind';
 import { useRouter } from 'expo-router';
 import { api } from '@/services/api';
-import { AttendanceHistoryRecord } from '@/types';
+import { ClassroomWithPercentage } from '@/types';
 
 cssInterop(LinearGradient, {
   className: 'style',
 });
 
-// Function to format date and time nicely
-const formatTimestamp = (isoString: string) => {
-  const date = new Date(isoString);
-  const formattedDate = date.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  const formattedTime = date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  return { date: formattedDate, time: formattedTime };
-};
+const ProgressBar = ({ percentage }: { percentage: number }) => {
+  const clampedPercentage = Math.max(0, Math.min(100, percentage));
+  let color = '#3498DB'; // Blue for normal
+  if (clampedPercentage < 50) color = '#E74C3C'; // Red for low
+  else if (clampedPercentage >= 80) color = '#2ECC71'; // Green for high
 
+  return (
+    <View className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+      <View 
+        style={{ width: `${clampedPercentage}%`, backgroundColor: color }} 
+        className="h-2.5 rounded-full" 
+      />
+    </View>
+  );
+};
 
 export default function ActivitiesScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceHistoryRecord[]>([]);
+  const [allClasses, setAllClasses] = useState<ClassroomWithPercentage[]>([]);
+  const [filteredClasses, setFilteredClasses] = useState<ClassroomWithPercentage[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchHistory = useCallback(async () => {
+  const fetchClasses = useCallback(async () => {
     try {
       if (!isRefreshing) setIsLoading(true);
-      const response = await api.getMyAttendanceHistory();
+      const response = await api.getMyEnrolledClasses();
       if (!response.ok) {
-        throw new Error("Failed to fetch attendance history");
+        throw new Error("Failed to fetch your classes");
       }
-      const data = await response.json();
-      setAttendanceHistory(data || []);
+      const data: ClassroomWithPercentage[] = await response.json();
+      setAllClasses(data || []);
+      setFilteredClasses(data || []);
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
@@ -54,25 +56,51 @@ export default function ActivitiesScreen() {
   }, [isRefreshing]);
 
   useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+    fetchClasses();
+  }, [fetchClasses]);
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
-    fetchHistory();
-  }, [fetchHistory]);
+    fetchClasses();
+  }, [fetchClasses]);
+
+  useEffect(() => {
+    const lowercasedQuery = searchQuery.toLowerCase();
+    const filtered = allClasses.filter(c => 
+      c.name.toLowerCase().includes(lowercasedQuery) ||
+      c.code.toLowerCase().includes(lowercasedQuery)
+    );
+    setFilteredClasses(filtered);
+  }, [searchQuery, allClasses]);
 
   return (
     <View className="flex-1 bg-gray-100">
       <LinearGradient 
         colors={['#3498DB', '#2C3E50']} 
-        className="p-6 pt-12 pb-6"
+        className="p-6 pt-12 pb-4"
       >
-        <View className="flex-row items-center">
+        <View className="flex-row items-center mb-4">
           <TouchableOpacity onPress={() => router.back()} className="mr-4 p-2">
             <ArrowLeft size={24} color="white" />
           </TouchableOpacity>
-          <Text className="text-white text-xl font-bold">Attendance History</Text>
+          <Text className="text-white text-xl font-bold">My Enrolled Classes</Text>
+        </View>
+        <View className="relative">
+          <View className="absolute inset-y-0 left-0 pl-3 flex-row items-center">
+            <Search size={20} color="black" />
+          </View>
+          <TextInput
+            className="bg-white/90 rounded-lg h-12 pl-10 pr-10 text-base"
+            placeholder="Search by name or code..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#9E9E9E"
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')} className="absolute inset-y-0 right-0 pr-3 flex-row items-center">
+              <X size={20} color="#9E9E9E" />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </LinearGradient>
 
@@ -82,58 +110,36 @@ export default function ActivitiesScreen() {
       >
         {isLoading ? (
           <ActivityIndicator size="large" color="#3498DB" />
-        ) : attendanceHistory.length === 0 ? (
+        ) : filteredClasses.length === 0 ? (
           <View className="bg-white rounded-2xl p-6 items-center justify-center mt-6">
             <BookOpen size={48} color="#BDC3C7" />
-            <Text className="text-gray-500 mt-2 text-center">No attendance records found</Text>
+            <Text className="text-gray-500 mt-4 text-center font-bold text-lg">
+              {searchQuery ? 'No Matching Classes' : 'No Classes Found'}
+            </Text>
             <Text className="text-gray-400 text-sm mt-2 text-center">
-              Your attendance history will appear here after you scan a QR code.
+              {searchQuery ? 'Try a different search term.' : 'You are not enrolled in any classes as a student.'}
             </Text>
           </View>
         ) : (
           <View className="flex-col gap-4">
-            <Text className="text-lg font-bold text-[#2C3E50]">
-              Recent Activity ({attendanceHistory.length} records)
-            </Text>
-            
-            {attendanceHistory.map((activity) => {
-              const { date, time } = formatTimestamp(activity.timestamp);
-              return (
-                <View 
-                  key={activity.id} 
-                  className="bg-white rounded-2xl overflow-hidden shadow"
-                >
-                  <Image 
-                    source={{ uri: `https://source.unsplash.com/random/400x200?classroom,study,${activity.classroomInfo.subjectCode}` }} 
-                    className="w-full h-32"
-                  />
-                  
-                  <View className="p-4">
-                    <View className="mb-3">
-                      <Text className="font-bold text-[#2C3E50] text-lg">{activity.classroomInfo.subjectName}</Text>
-                      <Text className="text-gray-500">ID: {activity.classroomInfo.subjectCode}</Text>
-                    </View>
-                    
-                    <View className="flex-row justify-between items-center">
-                      <View className="flex-row items-center">
-                        <CheckCircle size={18} color="#2ECC71" className="mr-2" />
-                        <Text className="text-green-500 font-bold">Attendance Marked</Text>
-                      </View>
-                      <View className="items-end">
-                        <View className="flex-row items-center">
-                          <Calendar size={14} color="#7F8C8D" className="mr-1" />
-                          <Text className="text-gray-600">{date}</Text>
-                        </View>
-                        <View className="flex-row items-center mt-1">
-                          <Clock size={14} color="#7F8C8D" className="mr-1" />
-                          <Text className="text-gray-600">{time}</Text>
-                        </View>
-                      </View>
-                    </View>
+            {filteredClasses.map((classroom) => (
+              <TouchableOpacity 
+                key={classroom.id} 
+                className="bg-white rounded-2xl p-4 shadow"
+                onPress={() => router.push({ pathname: '/attendance-details', params: { classId: classroom.id, className: classroom.name, classCode: classroom.code, instructorId: classroom.instructorId }})}
+              >
+                <View className="flex-row justify-between items-start">
+                  <View className="flex-1">
+                    <Text className="font-bold text-[#2C3E50] text-lg">{classroom.name}</Text>
+                    <Text className="text-gray-500">ID: {classroom.code}</Text>
                   </View>
+                  <Text className="font-bold text-[#2C3E50] text-lg">
+                    {(classroom.attendancePercentage ?? 0).toFixed(1)}%
+                  </Text>
                 </View>
-              )
-            })}
+                <ProgressBar percentage={classroom.attendancePercentage} />
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>

@@ -24,3 +24,8 @@ export interface Lecture {
 }
 
 // AttendanceSummary and AttendanceHistoryRecord interfaces removed as per backend changes.
+
+export interface ClassroomWithPercentage extends Classroom {
+  attendancePercentage: number;
+}
+

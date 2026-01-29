@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
-import { View, Text, TouchableOpacity, ScrollView, Alert, Image, Modal, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { 
   Plus, QrCode, Users, BookOpen, BarChart2,
   User, LogOut, XCircle, X
@@ -36,7 +36,7 @@ const EmptyState = ({ icon, title, message, actionTitle, onActionPress }: any) =
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { signOut, userName } = useAuth(); // MODIFIED
+  const { signOut, userName } = useAuth();
 
   const [isLoading, setIsLoading]              = useState(true);
   const [isRefreshing, setIsRefreshing]        = useState(false);
@@ -53,11 +53,11 @@ export default function HomeScreen() {
   const [joinClassCode, setJoinClassCode]        = useState('');
   const [isJoining, setIsJoining]                = useState(false);
   
-  const fetchClassrooms = useCallback(async () => {
+  const fetchTaughtClassrooms = useCallback(async () => {
     try {
       if (!isRefreshing) setIsLoading(true);
-      const response = await api.getMyClasses();
-      if (!response.ok) throw new Error("Failed to fetch classrooms");
+      const response = await api.getMyTaughtClasses();
+      if (!response.ok) throw new Error("Failed to fetch taught classrooms");
       const data = await response.json();
       setClassrooms(data || []);
     } catch (error: any) {
@@ -70,12 +70,12 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
-    fetchClassrooms();
-  }, [fetchClassrooms]);
+    fetchTaughtClassrooms();
+  }, [fetchTaughtClassrooms]);
 
   useEffect(() => {
-    fetchClassrooms();
-  }, [fetchClassrooms]);
+    fetchTaughtClassrooms();
+  }, [fetchTaughtClassrooms]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -85,28 +85,6 @@ export default function HomeScreen() {
   const handleLogout = () => {
     setShowLogoutMenu(false);
     signOut();
-  };
-
-  const handleLeaveClassroom = (classroomId: string, classroomName: string) => {
-    Alert.alert(
-      "Leave Classroom", `Are you sure you want to leave ${classroomName}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Leave", style: "destructive",
-          onPress: async () => {
-            try {
-              const response = await api.leaveClass(classroomId);
-              if (!response.ok) throw new Error("Failed to leave class");
-              Alert.alert("Success", `You have left ${classroomName}.`);
-              fetchClassrooms();
-            } catch (error: any) {
-              Alert.alert("Error", error.message);
-            }
-          }
-        }
-      ]
-    );
   };
 
   const handleCreateClassSubmit = async () => {
@@ -125,7 +103,7 @@ export default function HomeScreen() {
       setNewClassName('');
       setNewClassCode('');
       setShowCreateClassModal(false);
-      fetchClassrooms();
+      fetchTaughtClassrooms();
     } catch (error: any) {
       Alert.alert("Creation Failed", error.message);
     } finally {
@@ -152,7 +130,7 @@ export default function HomeScreen() {
       Alert.alert("Success", "You have joined the class!");
       setJoinClassCode('');
       setShowJoinClassModal(false);
-      fetchClassrooms();
+      // No need to refetch taught classrooms after joining one as a student
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
@@ -205,9 +183,9 @@ export default function HomeScreen() {
               <Users size={24} color="white" /><Text className="text-white font-bold mt-2 text-center">Join Class</Text>
             </TouchableOpacity>
             <TouchableOpacity className="bg-[#9B59B6] rounded-xl p-4 flex-1 min-w-[40%] items-center shadow" onPress={() => router.push('/activities')}>
-              <BarChart2 size={24} color="white" /><Text className="text-white font-bold mt-2 text-center">Activities</Text>
+              <BarChart2 size={24} color="white" /><Text className="text-white font-bold mt-2 text-center">My Activities</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="bg-[#F39C12] rounded-xl p-4 flex-1 min-w-[40%] items-center shadow" onPress={() => router.push('/face-auth-qr')}>
+            <TouchableOpacity className="bg-[#F39C12] rounded-xl p-4 flex-1 min-w-[40%] items-center shadow" onPress={() => router.push('/qr-scanner')}>
               <QrCode size={24} color="white" /><Text className="text-white font-bold mt-2 text-center">Scan QR</Text>
             </TouchableOpacity>
           </View>
@@ -215,24 +193,22 @@ export default function HomeScreen() {
         
         <View className="mb-6">
           <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-xl font-bold text-[#2C3E50]">My Classes</Text>
-            <Text className="text-[#3498DB] font-bold">{classrooms.length} joined</Text>
+            <Text className="text-xl font-bold text-[#2C3E50]">My Taught Classes</Text>
+            <Text className="text-[#3498DB] font-bold">{classrooms.length} teaching</Text>
           </View>
           {isLoading ? ( <ActivityIndicator size="large" color="#3498DB" />
           ) : classrooms.length === 0 ? (
-            <EmptyState icon={<BookOpen size={48} color="#BDC3C7" />} title="No Classes Joined" message="Use the 'Join Class' button to enroll in a class using a code." actionTitle="Join a Class" onActionPress={handleJoinClassroom}/>
+            <EmptyState icon={<BookOpen size={48} color="#BDC3C7" />} title="You are not teaching any classes" message="Use the 'Create Class' button to get started." actionTitle="Create a Class" onActionPress={() => setShowCreateClassModal(true)}/>
           ) : (
             <View className="flex-col gap-4">
               {classrooms.map((classroom) => (
-                <TouchableOpacity key={classroom.id} className="bg-white rounded-2xl p-4 shadow" onPress={() => router.push({ pathname: '/class-details', params: { classId: classroom.id, className: classroom.name }})}>
+                <TouchableOpacity key={classroom.id} className="bg-white rounded-2xl p-4 shadow" onPress={() => router.push({ pathname: '/instructor-classes', params: { classId: classroom.id, className: classroom.name }})}>
                   <View className="flex-row justify-between items-start">
                     <View className="flex-1">
                       <Text className="font-bold text-[#2C3E50] text-lg">{classroom.name}</Text>
-                      <Text className="text-gray-500">ID: {classroom.code}</Text>
+                      <Text className="text-gray-500">Code: {classroom.code}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleLeaveClassroom(classroom.id, classroom.name)}>
-                      <XCircle size={20} color="#E74C3C" />
-                    </TouchableOpacity>
+                    {/* Instructors don't "leave" their own class, they might delete it. Omitting for now. */}
                   </View>
                   <View className="flex-row justify-between mt-2"><Text className="text-xs text-gray-400">{classroom.enrolledStudents ? Object.keys(classroom.enrolledStudents).length : 0} students</Text></View>
                 </TouchableOpacity>
