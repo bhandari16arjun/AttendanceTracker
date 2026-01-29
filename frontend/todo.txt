@@ -1,0 +1,6 @@
+// frontend -> face auth to be added
+// correcting the no of students joining the class
+// one student can mark atmost one attendace for a class 
+// queue for offline attendance 
+// adding up ble
+// adding up analysis for student and teacher

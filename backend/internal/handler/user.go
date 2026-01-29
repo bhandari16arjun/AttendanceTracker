@@ -52,12 +52,14 @@ func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create a new user with the updated database.User model
 	newUser := database.User{
-		ID:           primitive.NewObjectID(),
-		Name:         req.Name,
-		Email:        req.Email,
-		Password:     hashedPassword,
-		ClassroomIDs: []primitive.ObjectID{},
+		ID:                primitive.NewObjectID(),
+		Name:              req.Name,
+		Email:             req.Email,
+		Password:          hashedPassword,
+		// Initialize AttendanceHistory as an empty map
+		AttendanceHistory: make(map[string][]primitive.ObjectID),
 	}
 
 	_, err = usersCollection.InsertOne(context.TODO(), newUser)
@@ -100,7 +102,6 @@ func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// MODIFIED: Pass user.Name to the GenerateJWT function
 	tokenString, err := auth.GenerateJWT(user.ID.Hex(), user.Name, h.JWT_Secret)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)

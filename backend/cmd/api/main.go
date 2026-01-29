@@ -5,7 +5,6 @@ package main
 import (
 	"log"
 	"net/http"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -16,6 +15,7 @@ import (
 )
 
 func main() {
+	// fmt.Println(handler)
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Error loading configuration: %v", err)
@@ -64,14 +64,14 @@ func main() {
 			r.Get("/classes", apiHandler.GetMyClasses)
 			r.Post("/classes/join", apiHandler.JoinClass)
 
-			r.Post("/classes/{classID}/leave", apiHandler.LeaveClass)
+			// r.Post("/classes/{classID}/leave", apiHandler.LeaveClass)
 
-			r.Post("/classes/{classID}/attendance-session", apiHandler.CreateAttendanceSession)
-			r.Post("/attendance/mark", apiHandler.MarkAttendance)
+			// r.Post("/classes/{classID}/attendance-session", apiHandler.CreateAttendanceSession)
+			// r.Post("/attendance/mark", apiHandler.MarkAttendance)
 
-			r.Get("/classes/{classID}/attendance", apiHandler.GetClassAttendance)
+			// r.Get("/classes/{classID}/attendance", apiHandler.GetClassAttendance)
 
-			r.Get("/attendance/history", apiHandler.GetMyAttendanceHistory)
+			// r.Get("/attendance/history", apiHandler.GetMyAttendanceHistory)
 		})
 	})
 

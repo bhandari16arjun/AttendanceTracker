@@ -1,28 +1,26 @@
 // types/index.ts
 
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  attendanceHistory?: Record<string, string[]>; // map[ClassroomID.Hex()] -> []LectureID.Hex()
+}
+
 export interface Classroom {
   id: string;
   name: string;
   code: string;
   instructorId: string;
-  studentIds: string[];
+  enrolledStudents?: Record<string, number>; // map[StudentID.Hex()] -> No of Lectures Attended
+  lectureIds?: string[]; // list of LectureIDs
 }
 
-export interface AttendanceSummary {
-  userId: string;
-  name:string;
-  email: string;
-  attendedCount: number;
-}
-
-// NEW TYPE
-export interface AttendanceHistoryRecord {
+export interface Lecture {
   id: string;
-  userId: string;
   classroomId: string;
-  timestamp: string; // ISO date string
-  classroomInfo: {
-    subjectName: string;
-    subjectCode: string;
-  };
+  date: string; // ISO date string
+  attendedBy?: string[]; // List of StudentIDs.Hex()
 }
+
+// AttendanceSummary and AttendanceHistoryRecord interfaces removed as per backend changes.

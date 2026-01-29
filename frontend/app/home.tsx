@@ -234,7 +234,7 @@ export default function HomeScreen() {
                       <XCircle size={20} color="#E74C3C" />
                     </TouchableOpacity>
                   </View>
-                  <View className="flex-row justify-between mt-2"><Text className="text-xs text-gray-400">{classroom.studentIds.length} students</Text></View>
+                  <View className="flex-row justify-between mt-2"><Text className="text-xs text-gray-400">{classroom.enrolledStudents ? Object.keys(classroom.enrolledStudents).length : 0} students</Text></View>
                 </TouchableOpacity>
               ))}
             </View>

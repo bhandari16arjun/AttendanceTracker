@@ -18,59 +18,58 @@ import (
 //        Data Models (Structs)
 // ==================================
 
+// User represents a user in the system (student or instructor).
 type User struct {
-	ID           primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
-	Name         string               `bson:"name" json:"name"`
-	Email        string               `bson:"email" json:"email"`
-	Password     string               `bson:"password" json:"-"`
-	ClassroomIDs []primitive.ObjectID `bson:"classroom_ids" json:"classroomIds"`
+	ID                primitive.ObjectID              `bson:"_id,omitempty" json:"id"`
+	Name              string                          `bson:"name" json:"name"`
+	Email             string                          `bson:"email" json:"email"`
+	Password          string                          `bson:"password" json:"-"`
+	// map[ClassroomID] -> []LectureID
+	AttendanceHistory map[string][]primitive.ObjectID `bson:"attendance_history" json:"attendanceHistory,omitempty"`
 }
 
+// Classroom represents a course or subject.
 type Classroom struct {
 	ID           primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
 	Name         string               `bson:"name" json:"name"`
 	Code         string               `bson:"code" json:"code"`
 	InstructorID primitive.ObjectID   `bson:"instructor_id" json:"instructorId"`
-	StudentIDs   []primitive.ObjectID `bson:"student_ids" json:"studentIds"`
+	// map[StudentID] -> No. of lectures attended
+	EnrolledStudents map[string]int       `bson:"enrolled_students" json:"enrolledStudents"`
+	LectureIDs       []primitive.ObjectID `bson:"lecture_ids" json:"lectureIds"`
 }
 
+// Lecture represents a single lecture session within a classroom.
+type Lecture struct {
+	ID          primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
+	ClassroomID primitive.ObjectID   `bson:"classroom_id" json:"classroomId"`
+	Date        time.Time            `bson:"date" json:"date"`
+	AttendedBy  []primitive.ObjectID `bson:"attended_by" json:"attendedBy"` // List of StudentIDs
+}
+
+// AttendanceSession is a short-lived document to validate attendance marking.
 type AttendanceSession struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty"`
-	Token       string             `bson:"token"`
-	ClassroomID primitive.ObjectID `bson:"classroom_id"`
-	CreatedAt   time.Time          `bson:"created_at"`
+	ID        primitive.ObjectID `bson:"_id,omitempty"`
+	Token     string             `bson:"token"`
+	LectureID primitive.ObjectID `bson:"lecture_id"`
+	CreatedAt time.Time          `bson:"created_at"`
 }
 
+// AttendanceRecord is the raw log of a single attendance event.
 type AttendanceRecord struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty"`
-	UserID      primitive.ObjectID `bson:"user_id"`
-	ClassroomID primitive.ObjectID `bson:"classroom_id"`
-	SessionID   primitive.ObjectID `bson:"session_id"` // NEW: Link to the session
-	Timestamp   time.Time          `bson:"timestamp"`
+	ID        primitive.ObjectID `bson:"_id,omitempty"`
+	UserID    primitive.ObjectID `bson:"user_id"`
+	LectureID primitive.ObjectID `bson:"lecture_id"`
+	SessionID primitive.ObjectID `bson:"session_id"`
+	Timestamp time.Time          `bson:"timestamp"`
 }
 
-type StudentAttendanceHistory struct {
-	ID            primitive.ObjectID `bson:"_id" json:"id"`
-	UserID        primitive.ObjectID `bson:"user_id" json:"userId"`
-	ClassroomID   primitive.ObjectID `bson:"classroom_id" json:"classroomId"`
-	Timestamp     time.Time          `bson:"timestamp" json:"timestamp"`
-	ClassroomInfo struct {
-		Name string `bson:"name" json:"subjectName"`
-		Code string `bson:"code" json:"subjectCode"`
-	} `bson:"classroomInfo" json:"classroomInfo"`
-}
-
-type ClassAttendanceSummary struct {
-	UserID        primitive.ObjectID `bson:"_id" json:"userId"`
-	Name          string             `bson:"name" json:"name"`
-	Email         string             `bson:"email" json:"email"`
-	AttendedCount int                `bson:"attendedCount" json:"attendedCount"`
-}
 
 // ==================================
 //       Database Connection
 // ==================================
 
+// Connect initializes the connection to the MongoDB database.
 func Connect(uri, dbName string) (*mongo.Database, error) {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	clientOptions := options.Client().ApplyURI(uri).SetServerAPIOptions(serverAPI)
@@ -90,11 +89,11 @@ func Connect(uri, dbName string) (*mongo.Database, error) {
 	log.Println("MongoDB connection established")
 	db := client.Database(dbName)
 
-	// --- Ensure TTL Index for Attendance Sessions ---
+	// Ensure TTL Index for Attendance Sessions to auto-delete them after a short period.
 	sessionsCollection := db.Collection("attendance_sessions")
 	ttlIndex := mongo.IndexModel{
 		Keys:    bson.D{{Key: "created_at", Value: 1}},
-		Options: options.Index().SetExpireAfterSeconds(60),
+		Options: options.Index().SetExpireAfterSeconds(60), // Tokens expire after 60 seconds
 	}
 	_, err = sessionsCollection.Indexes().CreateOne(context.Background(), ttlIndex)
 	if err != nil {
@@ -102,7 +101,8 @@ func Connect(uri, dbName string) (*mongo.Database, error) {
 	}
 	log.Println("TTL index for 'attendance_sessions' collection ensured.")
 
-	// --- NEW: Ensure Unique Index for Attendance Records ---
+	// Ensure a unique compound index on attendance records to prevent duplicate check-ins
+	// for the same user in the same session.
 	recordsCollection := db.Collection("attendance_records")
 	uniqueIndex := mongo.IndexModel{
 		Keys: bson.D{
@@ -119,3 +119,5 @@ func Connect(uri, dbName string) (*mongo.Database, error) {
 
 	return db, nil
 }
+
+
