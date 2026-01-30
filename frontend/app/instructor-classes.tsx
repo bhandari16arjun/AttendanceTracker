@@ -107,7 +107,7 @@ export default function InstructorClassesScreen() {
             </TouchableOpacity>
             <TouchableOpacity 
                 className="bg-purple-500 rounded-lg p-4 flex-1 flex-row justify-center items-center shadow"
-                // onPress={() => { /* Navigate to analytics page */ }}
+                onPress={() => router.push({ pathname: '/class-analytics', params: { classId: params.classId, className: params.className }})}
             >
                 <BarChartHorizontal size={20} color="white" />
                 <Text className="text-white font-bold ml-2">View Class Analytics</Text>
@@ -131,7 +131,11 @@ export default function InstructorClassesScreen() {
         ) : (
           <View className="flex-col gap-3">
             {lectures.map((lecture, index) => (
-              <View key={lecture.id} className="bg-white rounded-xl p-4 flex-row items-center shadow-sm">
+              <TouchableOpacity 
+                key={lecture.id} 
+                className="bg-white rounded-xl p-4 flex-row items-center shadow-sm"
+                onPress={() => router.push({ pathname: '/lecture-details', params: { classId: params.classId, lectureId: lecture.id }})}
+              >
                 <View className="w-10 h-10 rounded-full bg-gray-200 items-center justify-center mr-4">
                     <Text className="text-[#2C3E50] font-bold text-lg">{totalLectures - index}</Text>
                 </View>
@@ -139,7 +143,7 @@ export default function InstructorClassesScreen() {
                   <Text className="font-semibold text-gray-800">Lecture #{totalLectures - index}</Text>
                   <Text className="text-sm text-gray-500">{formatDate(lecture.date)}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}

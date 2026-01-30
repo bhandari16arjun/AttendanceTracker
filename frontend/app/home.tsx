@@ -185,7 +185,7 @@ export default function HomeScreen() {
             <TouchableOpacity className="bg-[#9B59B6] rounded-xl p-4 flex-1 min-w-[40%] items-center shadow" onPress={() => router.push('/activities')}>
               <BarChart2 size={24} color="white" /><Text className="text-white font-bold mt-2 text-center">My Activities</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="bg-[#F39C12] rounded-xl p-4 flex-1 min-w-[40%] items-center shadow" onPress={() => router.push('/qr-scanner')}>
+            <TouchableOpacity className="bg-[#F39C12] rounded-xl p-4 flex-1 min-w-[40%] items-center shadow" onPress={() => router.push('/face-auth-qr')}>
               <QrCode size={24} color="white" /><Text className="text-white font-bold mt-2 text-center">Scan QR</Text>
             </TouchableOpacity>
           </View>

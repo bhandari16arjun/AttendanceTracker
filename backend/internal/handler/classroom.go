@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"time" // Added
+	"time"
 
-	"backend/internal/database" // Use your module name
+	"backend/internal/database"
 
-	"github.com/go-chi/chi/v5" // Uncommented
+	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -16,8 +16,7 @@ import (
 )
 
 // CreateClass handles the creation of a new classroom.
-// CreateClass handles the creation of a new classroom based on the updated model.
- func (h *APIHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
+func (h *APIHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
 		// 1. Retrieve the user ID from the context (set by AuthMiddleware)
 		instructorIDHex, ok := r.Context().Value(UserIDContextKey).(string)
 		if !ok {
@@ -44,16 +43,13 @@ import (
 				Name:         req.Name,
 				Code:         req.Code,
 				InstructorID: instructorID,
-				// Initialize EnrolledStudents with the instructor, who has attended 0 lectures.
 				EnrolledStudents: make(map[string]int),
-				// Initialize LectureIDs as an empty slice.
 				LectureIDs: []primitive.ObjectID{},
 			}
 	
 			// 4. Insert the new classroom into the database
 			_, err := classroomsCollection.InsertOne(context.TODO(), newClass)
 			if err != nil {
-				// In a real app, you'd check for duplicate code errors specifically
 				http.Error(w, `{"error": "Failed to create classroom"}`, http.StatusInternalServerError)
 				return
 			}
@@ -123,7 +119,6 @@ func (h *APIHandler) GetMyEnrolledClasses(w http.ResponseWriter, r *http.Request
 	// 6. Calculate percentage for each class and build the final response.
 	var results []ClassroomWithPercentage
 	for _, classroom := range classrooms {
-		// As per requirement, filter out classes where the user is the instructor.
 		if classroom.InstructorID == userID {
 			continue
 		}
@@ -139,8 +134,6 @@ func (h *APIHandler) GetMyEnrolledClasses(w http.ResponseWriter, r *http.Request
 		if totalLectures > 0 {
 			percentage = (float64(attendedLectures) / float64(totalLectures)) * 100
 		} else {
-			// If no lectures have been held, percentage is 0. 
-			// You could also set this to 100 based on business rules.
 			percentage = 0 
 		}
 
@@ -181,7 +174,6 @@ func (h *APIHandler) GetMyTaughtClasses(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// If no classes are found, return an empty array instead of null.
 	if classrooms == nil {
 		classrooms = []database.Classroom{}
 	}
@@ -190,8 +182,61 @@ func (h *APIHandler) GetMyTaughtClasses(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(classrooms)
 }
 
+// GetClassroomDetails retrieves a single classroom by its ID.
+func (h *APIHandler) GetClassroomDetails(w http.ResponseWriter, r *http.Request) {
+	// 1. Get classID from the URL parameter.
+	classIDHex := chi.URLParam(r, "classID")
+	classID, err := primitive.ObjectIDFromHex(classIDHex)
+	if err != nil {
+		http.Error(w, `{"error": "Invalid class ID format"}`, http.StatusBadRequest)
+		return
+	}
+
+	classroomsCollection := h.DB.Collection("classrooms")
+
+	var classroom database.Classroom
+	err = classroomsCollection.FindOne(context.TODO(), bson.M{"_id": classID}).Decode(&classroom)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, `{"error": "Classroom not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error": "Database error while finding classroom"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(classroom)
+}
+
+// GetLectureDetails retrieves a single lecture by its ID.
+func (h *APIHandler) GetLectureDetails(w http.ResponseWriter, r *http.Request) {
+	// 1. Get lectureID from the URL parameter.
+	lectureIDHex := chi.URLParam(r, "lectureID")
+	lectureID, err := primitive.ObjectIDFromHex(lectureIDHex)
+	if err != nil {
+		http.Error(w, `{"error": "Invalid lecture ID format"}`, http.StatusBadRequest)
+		return
+	}
+
+	lecturesCollection := h.DB.Collection("lectures")
+
+	var lecture database.Lecture
+	err = lecturesCollection.FindOne(context.TODO(), bson.M{"_id": lectureID}).Decode(&lecture)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, `{"error": "Lecture not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error": "Database error while finding lecture"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lecture)
+}
+
 // JoinClass allows a student to join a classroom using a code.
-// JoinClass allows a student to join a classroom using a code, updating the new data models.
 func (h *APIHandler) JoinClass(w http.ResponseWriter, r *http.Request) {
 	// 1. Get student ID from the authentication token
 	studentIDHex, _ := r.Context().Value(UserIDContextKey).(string)
@@ -221,16 +266,11 @@ func (h *APIHandler) JoinClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-
-	// 4. Prevent the instructor from joining their own class as a student
 	if classroom.InstructorID == studentID {
 		http.Error(w, `{"error": "You cannot join your own class as a student"}`, http.StatusBadRequest)
 		return
 	}
 
-	// 5. Update the Classroom document to add the new student
-	// Using dot notation with $set adds the student to the 'EnrolledStudents' map with 0 lectures attended.
-	// This operation is idempotent; running it again won't cause duplicates.
 	updateClassroom := bson.M{
 		"$set": bson.M{
 			"enrolled_students." + studentID.Hex(): 0,
@@ -242,8 +282,6 @@ func (h *APIHandler) JoinClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 6. Update the User document to add the new classroom to their history
-	// This adds the classroom to the user's 'AttendanceHistory' map with an empty list of attended lectures.
 	updateUser := bson.M{
 		"$set": bson.M{
 			"attendance_history." + classroom.ID.Hex(): []primitive.ObjectID{},
@@ -286,7 +324,6 @@ func (h *APIHandler) GetStudentClassAttendanceDetails(w http.ResponseWriter, r *
 	classroomsCollection := h.DB.Collection("classrooms")
 	lecturesCollection := h.DB.Collection("lectures")
 
-	// 2. Fetch the user and classroom documents.
 	var user database.User
 	if err := usersCollection.FindOne(context.TODO(), bson.M{"_id": userID}).Decode(&user); err != nil {
 		http.Error(w, `{"error": "User not found"}`, http.StatusNotFound)
@@ -299,7 +336,6 @@ func (h *APIHandler) GetStudentClassAttendanceDetails(w http.ResponseWriter, r *
 		return
 	}
 
-	// 3. Get the list of all lecture IDs for the class.
 	totalLectureIDs := classroom.LectureIDs
 	if len(totalLectureIDs) == 0 { // No lectures in this class yet
 		w.Header().Set("Content-Type", "application/json")
@@ -310,8 +346,6 @@ func (h *APIHandler) GetStudentClassAttendanceDetails(w http.ResponseWriter, r *
 		return
 	}
 
-
-	// 4. Fetch all lecture documents for this class to get their dates.
 	cursor, err := lecturesCollection.Find(context.TODO(), bson.M{"_id": bson.M{"$in": totalLectureIDs}})
 	if err != nil {
 		http.Error(w, `{"error": "Failed to fetch lecture details"}`, http.StatusInternalServerError)
@@ -325,8 +359,6 @@ func (h *APIHandler) GetStudentClassAttendanceDetails(w http.ResponseWriter, r *
 		return
 	}
 
-	// 5. Get the list of attended lecture IDs for this class from the user's history
-	//    and create a map for efficient lookup.
 	attendedSet := make(map[primitive.ObjectID]bool)
 	if attendedLectureIDs, ok := user.AttendanceHistory[classID.Hex()]; ok {
 		for _, id := range attendedLectureIDs {
@@ -334,7 +366,6 @@ func (h *APIHandler) GetStudentClassAttendanceDetails(w http.ResponseWriter, r *
 		}
 	}
 
-	// 6. Build the lists of dates.
 	var attendedDates []time.Time
 	var totalDates []time.Time
 	for _, lecture := range allLectures {
@@ -344,7 +375,6 @@ func (h *APIHandler) GetStudentClassAttendanceDetails(w http.ResponseWriter, r *
 		}
 	}
 
-	// 7. Construct and send the response.
 	response := StudentAttendanceDetailsResponse{
 		AttendedLectureDates: attendedDates,
 		TotalLectureDates:    totalDates,
@@ -356,7 +386,6 @@ func (h *APIHandler) GetStudentClassAttendanceDetails(w http.ResponseWriter, r *
 
 // CreateLecture handles the creation of a new lecture for a specific classroom.
 func (h *APIHandler) CreateLecture(w http.ResponseWriter, r *http.Request) {
-	// Get classID from the URL parameter
 	classIDHex := chi.URLParam(r, "classID")
 	classID, err := primitive.ObjectIDFromHex(classIDHex)
 	if err != nil {
@@ -364,7 +393,6 @@ func (h *APIHandler) CreateLecture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Basic check to ensure the user is the instructor of this class
 	userIDHex, _ := r.Context().Value(UserIDContextKey).(string)
 	userID, _ := primitive.ObjectIDFromHex(userIDHex)
 
@@ -380,8 +408,6 @@ func (h *APIHandler) CreateLecture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For this implementation, we'll create a lecture with the current time.
-	// A more robust version might take a title/date in the request body.
 	newLecture := database.Lecture{
 		ID:          primitive.NewObjectID(),
 		ClassroomID: classID,
@@ -396,7 +422,6 @@ func (h *APIHandler) CreateLecture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add the lecture ID to the classroom's list of lectures
 	_, err = classroomsCollection.UpdateOne(
 		context.TODO(),
 		bson.M{"_id": classID},
@@ -414,7 +439,6 @@ func (h *APIHandler) CreateLecture(w http.ResponseWriter, r *http.Request) {
 
 // GetLecturesForClass retrieves all lectures for a given class, sorted by date.
 func (h *APIHandler) GetLecturesForClass(w http.ResponseWriter, r *http.Request) {
-	// 1. Get classID from the URL parameter.
 	classIDHex := chi.URLParam(r, "classID")
 	classID, err := primitive.ObjectIDFromHex(classIDHex)
 	if err != nil {
@@ -424,7 +448,6 @@ func (h *APIHandler) GetLecturesForClass(w http.ResponseWriter, r *http.Request)
 
 	lecturesCollection := h.DB.Collection("lectures")
 
-	// 2. Find all lectures for the given classroom ID, sort by date descending.
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{"date", -1}}) // Newest first
 
@@ -435,7 +458,6 @@ func (h *APIHandler) GetLecturesForClass(w http.ResponseWriter, r *http.Request)
 	}
 	defer cursor.Close(context.TODO())
 
-	// 3. Decode the results.
 	var lectures []database.Lecture
 	if err = cursor.All(context.TODO(), &lectures); err != nil {
 		http.Error(w, `{"error": "Failed to decode lectures"}`, http.StatusInternalServerError)
@@ -450,15 +472,112 @@ func (h *APIHandler) GetLecturesForClass(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(lectures)
 }
 
+// StudentAnalytics defines the analytics data for a single student in a class.
+type StudentAnalytics struct {
+	UserID               string  `json:"userId"`
+	Name                 string  `json:"name"`
+	Email                string  `json:"email"`
+	AttendedLecturesCount int     `json:"attendedLecturesCount"`
+	AttendancePercentage float64 `json:"attendancePercentage"`
+}
 
+// ClassAnalyticsResponse defines the structure for the class analytics response.
+type ClassAnalyticsResponse struct {
+	TotalLecturesCount int                `json:"totalLecturesCount"`
+	Students           []StudentAnalytics `json:"students"`
+}
+
+// GetClassAnalytics retrieves a full attendance report for a class.
+func (h *APIHandler) GetClassAnalytics(w http.ResponseWriter, r *http.Request) {
+	// 1. Verify user is the instructor for this class
+	instructorIDHex, _ := r.Context().Value(UserIDContextKey).(string)
+	instructorID, _ := primitive.ObjectIDFromHex(instructorIDHex)
+
+	classIDHex := chi.URLParam(r, "classID")
+	classID, err := primitive.ObjectIDFromHex(classIDHex)
+	if err != nil {
+		http.Error(w, `{"error": "Invalid classroom ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	classroomsCollection := h.DB.Collection("classrooms")
+	var classroom database.Classroom
+	err = classroomsCollection.FindOne(context.TODO(), bson.M{"_id": classID, "instructor_id": instructorID}).Decode(&classroom)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, `{"error": "Forbidden: You are not the instructor of this class"}`, http.StatusForbidden)
+			return
+		}
+		http.Error(w, `{"error": "Error finding classroom"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Prepare for fetching student details
+	studentIDs := []primitive.ObjectID{}
+	for idHex := range classroom.EnrolledStudents {
+		studentID, err := primitive.ObjectIDFromHex(idHex)
+		if err == nil {
+			studentIDs = append(studentIDs, studentID)
+		}
+	}
+
+	// 3. Fetch all student user documents in one query
+	usersCollection := h.DB.Collection("users")
+	cursor, err := usersCollection.Find(context.TODO(), bson.M{"_id": bson.M{"$in": studentIDs}})
+	if err != nil {
+		http.Error(w, `{"error": "Failed to fetch student details"}`, http.StatusInternalServerError)
+		return
+	}
+	defer cursor.Close(context.TODO())
+
+	// Create a map for easy lookup of user details by ID
+	userMap := make(map[string]database.User)
+	for cursor.Next(context.TODO()) {
+		var user database.User
+		if err := cursor.Decode(&user); err == nil {
+			userMap[user.ID.Hex()] = user
+		}
+	}
+
+
+	// 4. Build the response
+	totalLectures := len(classroom.LectureIDs)
+	studentAnalytics := []StudentAnalytics{}
+
+	for idHex, attendedCount := range classroom.EnrolledStudents {
+		user, ok := userMap[idHex]
+		if !ok {
+			continue // Skip if user details weren't found for some reason
+		}
+
+		var percentage float64
+		if totalLectures > 0 {
+			percentage = (float64(attendedCount) / float64(totalLectures)) * 100
+		}
+
+		studentAnalytics = append(studentAnalytics, StudentAnalytics{
+			UserID:               idHex,
+			Name:                 user.Name,
+			Email:                user.Email,
+			AttendedLecturesCount: attendedCount,
+			AttendancePercentage: percentage,
+		})
+	}
+
+	response := ClassAnalyticsResponse{
+		TotalLecturesCount: totalLectures,
+		Students:           studentAnalytics,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
 
 // // ... (at the end of the file)
-
 // // LeaveClass allows a user to leave a classroom.
 // func (h *APIHandler) LeaveClass(w http.ResponseWriter, r *http.Request) {
 // 	userIDHex, _ := r.Context().Value(UserIDContextKey).(string)
 // 	userID, _ := primitive.ObjectIDFromHex(userIDHex)
-
 // 	// Get classID from the URL parameter
 // 	classIDHex := chi.URLParam(r, "classID")
 // 	classID, err := primitive.ObjectIDFromHex(classIDHex)
@@ -466,10 +585,8 @@ func (h *APIHandler) GetLecturesForClass(w http.ResponseWriter, r *http.Request)
 // 		http.Error(w, `{"error": "Invalid classroom ID format"}`, http.StatusBadRequest)
 // 		return
 // 	}
-
 // 	classroomsCollection := h.DB.Collection("classrooms")
 // 	usersCollection := h.DB.Collection("users")
-
 // 	// Use $pull to remove an item from an array
 // 	// Remove student from the classroom's student list
 // 	_, err = classroomsCollection.UpdateOne(
@@ -481,7 +598,6 @@ func (h *APIHandler) GetLecturesForClass(w http.ResponseWriter, r *http.Request)
 // 		http.Error(w, `{"error": "Failed to remove student from classroom"}`, http.StatusInternalServerError)
 // 		return
 // 	}
-
 // 	// Remove classroom from the student's classroom list
 // 	_, err = usersCollection.UpdateOne(
 // 		context.TODO(),
@@ -492,7 +608,6 @@ func (h *APIHandler) GetLecturesForClass(w http.ResponseWriter, r *http.Request)
 // 		http.Error(w, `{"error": "Failed to remove classroom from user"}`, http.StatusInternalServerError)
 // 		return
 // 	}
-
 // 	w.Header().Set("Content-Type", "application/json")
 // 	json.NewEncoder(w).Encode(map[string]string{"message": "Successfully left classroom"})
 // }

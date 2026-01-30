@@ -42,6 +42,18 @@ export const api = {
   },
 
   // --- CLASSROOMS ---
+  getClassroomDetails: async (classId: string) => {
+    return fetch(`${API_BASE_URL}/classes/${classId}`, {
+      method: 'GET',
+      headers: await getAuthHeaders(),
+    });
+  },
+  getClassAnalytics: async (classId: string) => {
+    return fetch(`${API_BASE_URL}/classes/${classId}/analytics`, {
+      method: 'GET',
+      headers: await getAuthHeaders(),
+    });
+  },
   createClass: async (data: { name: string; code: string }) => {
     return fetch(`${API_BASE_URL}/classes`, {
       method: 'POST',
@@ -76,6 +88,12 @@ export const api = {
   },
 
   // --- LECTURES ---
+  getLectureDetails: async (lectureId: string) => {
+    return fetch(`${API_BASE_URL}/lectures/${lectureId}`, {
+      method: 'GET',
+      headers: await getAuthHeaders(),
+    });
+  },
   createLecture: async (classId: string) => {
     return fetch(`${API_BASE_URL}/classes/${classId}/lectures`, {
       method: 'POST',
@@ -91,8 +109,8 @@ export const api = {
   },
 
   // --- ATTENDANCE ---
-  createAttendanceSession: async (classID: string) => {
-    return fetch(`${API_BASE_URL}/classes/${classID}/attendance-session`, {
+  createAttendanceSession: async (lectureId: string) => {
+    return fetch(`${API_BASE_URL}/lectures/${lectureId}/attendance-session`, {
       method: 'POST',
       headers: await getAuthHeaders(),
     });
@@ -120,6 +138,15 @@ export const api = {
     return fetch(`${API_BASE_URL}/classes/${classId}/students/${userId}/attendance`, {
       method: 'GET',
       headers: await getAuthHeaders(),
+    });
+  },
+
+  // --- USERS ---
+  getUsersDetails: async (userIds: string[]) => {
+    return fetch(`${API_BASE_URL}/users/details`, {
+      method: 'POST',
+      headers: await getAuthHeaders(),
+      body: JSON.stringify({ userIds }),
     });
   },
 };

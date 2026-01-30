@@ -73,15 +73,20 @@ func main() {
 			// Lecture routes
 			r.Post("/classes/{classID}/lectures", apiHandler.CreateLecture)
 			r.Get("/classes/{classID}/lectures", apiHandler.GetLecturesForClass)
+			r.Get("/lectures/{lectureID}", apiHandler.GetLectureDetails) // New
 
+			// User routes
+			r.Post("/users/details", apiHandler.GetUsersDetails) // New
+
+			// Attendance Routes
+			r.Post("/lectures/{lectureID}/attendance-session", apiHandler.CreateAttendanceSession)
+			r.Post("/attendance/mark", apiHandler.MarkAttendance)
+			
 			// r.Post("/classes/{classID}/leave", apiHandler.LeaveClass)
 
-			// r.Post("/classes/{classID}/attendance-session", apiHandler.CreateAttendanceSession)
-			// r.Post("/attendance/mark", apiHandler.MarkAttendance)
-
-			// r.Get("/classes/{classID}/attendance", apiHandler.GetClassAttendance)
-
-			// r.Get("/attendance/history", apiHandler.GetMyAttendanceHistory)
+			// Individual entity retrieval
+			r.Get("/classes/{classID}", apiHandler.GetClassroomDetails) // New
+			r.Get("/classes/{classID}/analytics", apiHandler.GetClassAnalytics) // New
 		})
 	})
 

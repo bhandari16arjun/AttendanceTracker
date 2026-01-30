@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // APIHandler holds dependencies for HTTP handlers.
@@ -110,4 +111,54 @@ func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
+}
+
+// GetUsersDetails retrieves a list of users by their IDs.
+func (h *APIHandler) GetUsersDetails(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserIDs []string `json:"userIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	var objectIDs []primitive.ObjectID
+	for _, idHex := range req.UserIDs {
+		objID, err := primitive.ObjectIDFromHex(idHex)
+		if err == nil {
+			objectIDs = append(objectIDs, objID)
+		}
+	}
+
+	if len(objectIDs) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]database.User{})
+		return
+	}
+
+	usersCollection := h.DB.Collection("users")
+	
+    // Only return public information (ID, Name, and Email)
+    findOptions := options.Find().SetProjection(bson.M{"_id": 1, "name": 1, "email": 1})
+
+	cursor, err := usersCollection.Find(context.TODO(), bson.M{"_id": bson.M{"$in": objectIDs}}, findOptions)
+	if err != nil {
+		http.Error(w, `{"error": "Database error while finding users"}`, http.StatusInternalServerError)
+		return
+	}
+	defer cursor.Close(context.TODO())
+
+	var users []database.User
+	if err = cursor.All(context.TODO(), &users); err != nil {
+		http.Error(w, `{"error": "Failed to decode users"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if users == nil {
+		users = []database.User{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
 }

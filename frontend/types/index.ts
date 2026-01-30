@@ -23,9 +23,21 @@ export interface Lecture {
   attendedBy?: string[]; // List of StudentIDs.Hex()
 }
 
-// AttendanceSummary and AttendanceHistoryRecord interfaces removed as per backend changes.
-
 export interface ClassroomWithPercentage extends Classroom {
   attendancePercentage: number;
 }
 
+export interface StudentAnalytics {
+  userId: string;
+  name: string;
+  email: string;
+  attendedLecturesCount: number;
+  attendancePercentage: number;
+}
+
+export interface ClassAnalyticsResponse {
+  totalLecturesCount: number;
+  students: StudentAnalytics[];
+}
+
+// AttendanceSummary and AttendanceHistoryRecord interfaces removed as per backend changes.

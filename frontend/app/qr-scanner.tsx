@@ -1,28 +1,29 @@
 // app/qr-scanner.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { ChevronLeft, RotateCcw, QrCode } from 'lucide-react-native';
+import { ChevronLeft, RotateCcw } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import QRCode from 'react-native-qrcode-svg'; // Import the new library
+import QRCode from 'react-native-qrcode-svg';
 import { api } from '@/services/api';
 
 const QR_REFRESH_INTERVAL = 30; // seconds
 
 export default function QRScannerScreen() {
   const router = useRouter();
-  const { classId, className } = useLocalSearchParams<{ classId: string; className: string }>();
+  // This page now expects lectureId and className to generate its own token
+  const { lectureId, className } = useLocalSearchParams<{ lectureId: string; className: string }>();
 
   const [isLoading, setIsLoading] = useState(true);
   const [attendanceToken, setAttendanceToken] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(QR_REFRESH_INTERVAL);
 
-  const generateNewToken = async () => {
-    if (!classId) return;
+  const generateNewToken = useCallback(async () => {
+    if (!lectureId) return;
     setIsLoading(true);
     setAttendanceToken(null);
     try {
-      const response = await api.createAttendanceSession(classId);
+      const response = await api.createAttendanceSession(lectureId);
       if (!response.ok) {
         throw new Error("Failed to create attendance session");
       }
@@ -34,12 +35,12 @@ export default function QRScannerScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [lectureId, router]);
 
   // Generate token on initial load
   useEffect(() => {
     generateNewToken();
-  }, []);
+  }, [generateNewToken]);
 
   // Countdown timer
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function QRScannerScreen() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [attendanceToken]);
+  }, [attendanceToken, generateNewToken]);
 
 
   return (
