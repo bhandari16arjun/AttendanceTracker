@@ -18,6 +18,7 @@ interface AuthContextData {
   userName: string | null; // NEW: Add userName to our context
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithFace: (email: string, faceImage: string) => Promise<void>; // NEW
   signOut: () => void;
 }
 
@@ -42,7 +43,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } catch (e) {
         console.error("Failed to load or decode token:", e);
         await AsyncStorage.removeItem('userToken');
-      } finally {
+      }
+       finally {
         setIsLoading(false);
       }
     }
@@ -65,6 +67,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await AsyncStorage.setItem('userToken', newToken);
   };
 
+  const signInWithFace = async (email: string, faceImage: string) => { // NEW
+    const response = await api.loginFace({ email, faceImage });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Face Login failed');
+    }
+    const data = await response.json();
+    const newToken = data.token;
+    
+    setToken(newToken);
+    const decodedToken: DecodedToken = jwtDecode(newToken);
+    setUserId(decodedToken.user_id);
+    setUserName(decodedToken.name);
+    await AsyncStorage.setItem('userToken', newToken);
+  };
+
   const signOut = async () => {
     setToken(null);
     setUserId(null);
@@ -73,7 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ token, userId, userName, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ token, userId, userName, isLoading, signIn, signInWithFace, signOut }}>
       {children}
     </AuthContext.Provider>
   );

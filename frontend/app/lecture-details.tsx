@@ -123,6 +123,25 @@ export default function LectureDetailsScreen() {
     };
   }, [classroom, userId]);
 
+  // Periodically Sync Detected Students with Server (Every 5s)
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (classroom?.instructorId === userId && isScanning && devices.length > 0 && params.lectureId) {
+        interval = setInterval(async () => {
+             const detectedIds = devices.map(d => d.name).filter(Boolean) as string[];
+             if (detectedIds.length > 0) {
+                 try {
+                     await api.syncDetectedUsers(params.lectureId, detectedIds);
+                     console.log("Synced detected students:", detectedIds.length);
+                 } catch (e) {
+                     console.error("Sync failed", e);
+                 }
+             }
+        }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [classroom, userId, isScanning, devices, params.lectureId]);
+
   const handleGenerateQR = () => {
     if (!params.lectureId || !classroom?.name) return;
     router.push({ 

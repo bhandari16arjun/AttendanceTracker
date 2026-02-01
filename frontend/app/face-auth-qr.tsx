@@ -1,12 +1,11 @@
-// app/face-auth-qr.tsx (Final Corrected Version)
+// app/face-auth-qr.tsx
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet } from 'react-native';
-// MODIFIED: Added 'Camera as CameraIcon' to the lucide-react-native import
-import { Camera as CameraIcon, UserCheck, QrCode, CheckCircle, XCircle, ArrowLeft } from 'lucide-react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet, Modal } from 'react-native';
+import { Camera as CameraIcon, UserCheck, QrCode, CheckCircle, XCircle, ArrowLeft, Smile } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-// This import is also correct
-import { Camera, CameraView } from 'expo-camera'; 
+import { CameraView, useCameraPermissions } from 'expo-camera'; 
+import * as FaceDetector from 'expo-face-detector';
 import { api } from '@/services/api';
 
 type AuthStep = 'face-auth' | 'qr-scan' | 'submitting' | 'success' | 'failure';
@@ -14,35 +13,123 @@ type AuthStep = 'face-auth' | 'qr-scan' | 'submitting' | 'success' | 'failure';
 export default function FaceAuthQRScreen() {
   const router = useRouter();
   const [authStep, setAuthStep] = useState<AuthStep>('face-auth');
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  
+  // State
+  const [faceImage, setFaceImage] = useState<string | null>(null);
   const [scanned, setScanned] = useState(false);
   const [failureMessage, setFailureMessage] = useState('');
+  
+  // Blink Detection State
+  const [detectionStatus, setDetectionStatus] = useState("Position your face");
+  const [eyesOpen, setEyesOpen] = useState(true);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   useEffect(() => {
-    const getCameraPermissions = async () => {
-      // This call is correct
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    };
-    getCameraPermissions();
-  }, []);
+    if (!permission?.granted) {
+        requestPermission();
+    }
+  }, [permission]);
 
-  const handleFaceAuth = () => {
-    setIsAuthenticating(true);
-    setTimeout(() => {
-      setIsAuthenticating(false);
-      setAuthStep('qr-scan');
-    }, 1500);
+  // Polling for Face Detection (Only active in 'face-auth' step)
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    const detectFaceLoop = async () => {
+        // Stop if not in face-auth step, or if capturing, or if camera ref is missing
+        if (authStep !== 'face-auth' || isCapturing || !cameraRef.current) return;
+
+        try {
+            const photo = await cameraRef.current.takePictureAsync({
+                quality: 0.1,
+                base64: false, 
+                skipProcessing: true,
+                shutterSound: false,
+            });
+
+            if (photo?.uri) {
+                const result = await FaceDetector.detectFacesAsync(photo.uri, {
+                    mode: FaceDetector.FaceDetectorMode.fast,
+                    detectLandmarks: FaceDetector.FaceDetectorLandmarks.all,
+                    runClassifications: FaceDetector.FaceDetectorClassifications.all,
+                });
+
+                if (result.faces.length > 0) {
+                    const face = result.faces[0];
+                    const rightEye = face.rightEyeOpenProbability;
+                    const leftEye = face.leftEyeOpenProbability;
+                    
+                    const IS_OPEN = 0.8;
+                    const IS_CLOSED = 0.3;
+
+                    if (eyesOpen && (rightEye < IS_CLOSED && leftEye < IS_CLOSED)) {
+                        setEyesOpen(false);
+                        setDetectionStatus("Blink detected! Open eyes...");
+                    } else if (!eyesOpen && (rightEye > IS_OPEN && leftEye > IS_OPEN)) {
+                        setEyesOpen(true);
+                        setDetectionStatus("Capturing...");
+                        await captureFace();
+                    } else if (eyesOpen) {
+                        setDetectionStatus("Please Blink to capture");
+                    }
+                } else {
+                    setDetectionStatus("No face detected");
+                }
+            }
+        } catch (e) {}
+    };
+
+    if (authStep === 'face-auth') {
+        interval = setInterval(detectFaceLoop, 800);
+    }
+
+    return () => clearInterval(interval);
+  }, [authStep, isCapturing, eyesOpen]);
+
+  const captureFace = async () => {
+    if (cameraRef.current && !isCapturing) {
+        setIsCapturing(true);
+        try {
+            const photo = await cameraRef.current.takePictureAsync({
+                quality: 0.5,
+                base64: true,
+                skipProcessing: false,
+            });
+            
+            if (photo?.base64) {
+                 setDetectionStatus("Verifying Identity...");
+                 // 1. Verify Face with Backend
+                 const response = await api.verifyFace(photo.base64);
+                 
+                 if (response.ok) {
+                     setFaceImage(photo.base64);
+                     setAuthStep('qr-scan'); // Proceed to QR
+                 } else {
+                     Alert.alert("Unauthorized", "Face verification failed. You are not authorized.", [
+                         { text: "OK", onPress: () => router.back() }
+                     ]);
+                 }
+            }
+        } catch (error) {
+            Alert.alert("Error", "Failed to capture or verify face");
+            setIsCapturing(false); // Only reset if technical error, otherwise we leave
+        }
+        // If success, we moved step. If fail, we routed back.
+    }
   };
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (scanned) return;
+    if (scanned || !faceImage) return;
     setScanned(true);
     setAuthStep('submitting');
     
     try {
-      const response = await api.markAttendance({ attendanceToken: data });
+      const response = await api.markAttendance({ 
+          attendanceToken: data,
+          faceImage: faceImage 
+      });
+
       if (!response.ok) {
         const err = await response.json();
         if (response.status === 409) { 
@@ -63,34 +150,42 @@ export default function FaceAuthQRScreen() {
     switch (authStep) {
       case 'face-auth':
         return (
-          <View className="w-full bg-white rounded-2xl p-6 items-center shadow-lg">
+          <View className="w-full bg-white rounded-2xl p-6 items-center shadow-lg h-[450px]">
             <UserCheck color="#3498DB" size={64} />
-            <Text className="text-[#2C3E50] text-2xl font-bold mt-4">Face Authentication</Text>
-            <Text className="text-gray-600 text-center mt-2 mb-6">Please position your face in the frame for authentication.</Text>
-            <View className="w-64 h-64 bg-gray-200 rounded-xl items-center justify-center mb-6">
-              {/* MODIFIED: Use the aliased 'CameraIcon' component */}
-              <CameraIcon color="#2C3E50" size={48} />
-              <Text className="text-[#2C3E50] mt-2">Camera View (Mock)</Text>
+            <Text className="text-[#2C3E50] text-2xl font-bold mt-4 mb-2">Face Verification</Text>
+            <Text className={`text-lg font-bold mb-4 ${detectionStatus.includes("Capturing") ? "text-green-500" : "text-orange-500"}`}>
+                {detectionStatus}
+            </Text>
+            
+            <View className="w-64 h-64 bg-black rounded-xl overflow-hidden relative">
+              <CameraView 
+                  ref={cameraRef}
+                  style={StyleSheet.absoluteFill} 
+                  facing="front"
+              />
+              {isCapturing && (
+                  <View className="absolute inset-0 bg-black/50 items-center justify-center">
+                      <ActivityIndicator size="large" color="white" />
+                  </View>
+              )}
             </View>
-            <TouchableOpacity className="bg-[#3498DB] rounded-full py-3 px-8 flex-row items-center" onPress={handleFaceAuth} disabled={isAuthenticating}>
-              {isAuthenticating ? <ActivityIndicator color="white" /> : <><UserCheck color="white" size={20} /><Text className="text-white font-bold ml-2">Authenticate Face</Text></>}
-            </TouchableOpacity>
+            <Text className="text-gray-400 text-xs mt-4">Blink to verify liveness and capture.</Text>
           </View>
         );
 
       case 'qr-scan':
-        if (hasPermission === null) return <Text>Requesting for camera permission...</Text>;
-        if (hasPermission === false) return <Text>No access to camera. Please enable it in settings.</Text>;
+        if (!permission?.granted) return <Text>Requesting camera permission...</Text>;
         return (
-          <View className="w-full bg-white rounded-2xl p-6 items-center shadow-lg">
+          <View className="w-full bg-white rounded-2xl p-6 items-center shadow-lg h-[450px]">
             <QrCode color="#3498DB" size={64} />
             <Text className="text-[#2C3E50] text-2xl font-bold mt-4">Scan QR Code</Text>
-            <Text className="text-gray-600 text-center mt-2 mb-6">Position the instructor's QR code in the frame.</Text>
+            <Text className="text-gray-600 text-center mt-2 mb-6">Face Verified ✅. Now scan the code.</Text>
             <View className="w-64 h-64 bg-gray-200 rounded-xl overflow-hidden">
               <CameraView
                 onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
                 barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
                 style={StyleSheet.absoluteFillObject}
+                facing="back"
               />
             </View>
           </View>
@@ -100,8 +195,8 @@ export default function FaceAuthQRScreen() {
         return (
           <View className="w-full bg-white rounded-2xl p-6 items-center shadow-lg">
             <ActivityIndicator size="large" color="#3498DB" />
-            <Text className="text-[#2C3E50] text-2xl font-bold mt-4">Submitting...</Text>
-            <Text className="text-gray-600 text-center mt-2">Marking your attendance.</Text>
+            <Text className="text-[#2C3E50] text-2xl font-bold mt-4">Verifying...</Text>
+            <Text className="text-gray-600 text-center mt-2">Checking Face Match & Token.</Text>
           </View>
         );
 
@@ -125,7 +220,7 @@ export default function FaceAuthQRScreen() {
                 <Text className="text-gray-700 font-bold">Back to Home</Text>
               </TouchableOpacity>
               <TouchableOpacity className="bg-[#3498DB] rounded-full py-3 px-4 flex-1 ml-2 items-center" onPress={() => { setScanned(false); setAuthStep('qr-scan'); }}>
-                <Text className="text-white font-bold">Try Again</Text>
+                <Text className="text-white font-bold">Try QR Again</Text>
               </TouchableOpacity>
             </View>
           </View>

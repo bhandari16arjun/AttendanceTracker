@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // !! IMPORTANT !!
 // This should still be your computer's local IP address.
-const API_BASE_URL = 'http://10.125.44.240:3000/api';
+const API_BASE_URL = 'http://10.125.26.253:3000/api';
 
 /**
  * A helper function to create authenticated headers for API requests.
@@ -26,7 +26,7 @@ async function getAuthHeaders() {
  */
 export const api = {
   // --- AUTH ---
-  register: (data: { name?: string; email?: string; password?: string }) => {
+  register: (data: { name?: string; email?: string; password?: string; faceImage?: string }) => {
     return fetch(`${API_BASE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -35,6 +35,13 @@ export const api = {
   },
   login: (data: { email?: string; password?: string }) => {
     return fetch(`${API_BASE_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  loginFace: (data: { email?: string; faceImage?: string }) => {
+    return fetch(`${API_BASE_URL}/login-face`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -115,11 +122,25 @@ export const api = {
       headers: await getAuthHeaders(),
     });
   },
-  markAttendance: async (data: { attendanceToken: string }) => {
+  markAttendance: async (data: { attendanceToken: string; faceImage?: string }) => {
     return fetch(`${API_BASE_URL}/attendance/mark`, {
       method: 'POST',
       headers: await getAuthHeaders(),
       body: JSON.stringify(data),
+    });
+  },
+  markAttendanceProximity: async (data: { lectureId: string; faceImage?: string }) => {
+    return fetch(`${API_BASE_URL}/attendance/mark-proximity`, {
+      method: 'POST',
+      headers: await getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+  },
+  syncDetectedUsers: async (lectureId: string, detectedStudentIds: string[]) => {
+    return fetch(`${API_BASE_URL}/lectures/${lectureId}/sync-detected`, {
+      method: 'POST',
+      headers: await getAuthHeaders(),
+      body: JSON.stringify({ detectedStudentIds }),
     });
   },
   getClassAttendance: async (classID: string) => {
@@ -147,6 +168,13 @@ export const api = {
       method: 'POST',
       headers: await getAuthHeaders(),
       body: JSON.stringify({ userIds }),
+    });
+  },
+  verifyFace: async (faceImage: string) => {
+    return fetch(`${API_BASE_URL}/users/verify-face`, {
+      method: 'POST',
+      headers: await getAuthHeaders(),
+      body: JSON.stringify({ faceImage }),
     });
   },
 };

@@ -54,6 +54,7 @@ func main() {
 		// Public routes - No middleware needed
 		r.Post("/register", apiHandler.Register)
 		r.Post("/login", apiHandler.Login)
+		r.Post("/login-face", apiHandler.LoginFace) // New: Login with face
 
 		// Protected routes - Group them and apply the middleware
 		r.Group(func(r chi.Router) {
@@ -77,11 +78,14 @@ func main() {
 
 			// User routes
 			r.Post("/users/details", apiHandler.GetUsersDetails) // New
+			r.Post("/users/verify-face", apiHandler.VerifyFace) // New: Verify face for authenticated user
 
 			// Attendance Routes
 			r.Post("/lectures/{lectureID}/attendance-session", apiHandler.CreateAttendanceSession)
 			r.Post("/attendance/mark", apiHandler.MarkAttendance)
+			r.Post("/attendance/mark-proximity", apiHandler.MarkAttendanceProximity) // New proximity mark route
 			r.Post("/lectures/{lectureID}/mark-student", apiHandler.MarkStudentAttendance) // New manual mark route
+			r.Post("/lectures/{lectureID}/sync-detected", apiHandler.SyncDetectedUsers) // New: Instructor syncs detected students
 			
 			// r.Post("/classes/{classID}/leave", apiHandler.LeaveClass)
 

@@ -24,6 +24,7 @@ type User struct {
 	Name              string                          `bson:"name" json:"name"`
 	Email             string                          `bson:"email" json:"email"`
 	Password          string                          `bson:"password" json:"-"`
+	FaceRegistered    bool                            `bson:"face_registered" json:"faceRegistered"` 
 	// map[ClassroomID] -> []LectureID
 	AttendanceHistory map[string][]primitive.ObjectID `bson:"attendance_history" json:"attendanceHistory,omitempty"`
 }
@@ -45,6 +46,7 @@ type Lecture struct {
 	ClassroomID primitive.ObjectID   `bson:"classroom_id" json:"classroomId"`
 	Date        time.Time            `bson:"date" json:"date"`
 	AttendedBy  []primitive.ObjectID `bson:"attended_by" json:"attendedBy"` // List of StudentIDs
+	LiveDetectedUsers []primitive.ObjectID `bson:"live_detected_users" json:"liveDetectedUsers"` // Real-time detected students
 }
 
 // AttendanceSession is a short-lived document to validate attendance marking.

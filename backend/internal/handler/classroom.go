@@ -125,14 +125,26 @@ func (h *APIHandler) GetMyEnrolledClasses(w http.ResponseWriter, r *http.Request
 
 		totalLectures := len(classroom.LectureIDs)
 		
-		attendedLectures := 0
+		// Create a set of the user's attended lecture IDs for this class
+		attendedSet := make(map[primitive.ObjectID]bool)
 		if lectures, ok := user.AttendanceHistory[classroom.ID.Hex()]; ok {
-			attendedLectures = len(lectures)
+			for _, lID := range lectures {
+				attendedSet[lID] = true
+			}
+		}
+
+		// Count how many of the CLASSROOM's lectures the user has attended.
+		// This ensures we don't count "ghost" lectures (e.g. deleted ones) that might remain in user history.
+		verifiedAttendedCount := 0
+		for _, classLectureID := range classroom.LectureIDs {
+			if attendedSet[classLectureID] {
+				verifiedAttendedCount++
+			}
 		}
 
 		var percentage float64
 		if totalLectures > 0 {
-			percentage = (float64(attendedLectures) / float64(totalLectures)) * 100
+			percentage = (float64(verifiedAttendedCount) / float64(totalLectures)) * 100
 		} else {
 			percentage = 0 
 		}
@@ -409,10 +421,11 @@ func (h *APIHandler) CreateLecture(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newLecture := database.Lecture{
-		ID:          primitive.NewObjectID(),
-		ClassroomID: classID,
-		Date:        time.Now(),
-		AttendedBy:  []primitive.ObjectID{},
+		ID:                primitive.NewObjectID(),
+		ClassroomID:       classID,
+		Date:              time.Now(),
+		AttendedBy:        []primitive.ObjectID{},
+		LiveDetectedUsers: []primitive.ObjectID{},
 	}
 
 	lecturesCollection := h.DB.Collection("lectures")

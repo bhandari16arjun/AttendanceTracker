@@ -57,6 +57,7 @@
     "expo-blur": "15.0.7",
     "expo-camera": "~17.0.9",
     "expo-constants": "18.0.9",
+    "expo-face-detector": "^13.0.2",
     "expo-font": "14.0.8",
     "expo-haptics": "15.0.7",
     "expo-linear-gradient": "^15.0.7",
