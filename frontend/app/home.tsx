@@ -5,13 +5,14 @@ import { useRouter } from 'expo-router';
 import { View, Text, TouchableOpacity, ScrollView, Alert, Modal, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { 
   Plus, QrCode, Users, BookOpen, BarChart2,
-  User, LogOut, XCircle, X
+  User, LogOut, XCircle, X, Radio
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cssInterop } from 'nativewind';
 import { useAuth } from '@/app/context/AuthContext';
 import { api } from '@/services/api';
 import { Classroom } from '@/types';
+import { useBle } from '@/app/context/BleContext';
 
 cssInterop(LinearGradient, {
   className: 'style',
@@ -36,7 +37,8 @@ const EmptyState = ({ icon, title, message, actionTitle, onActionPress }: any) =
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { signOut, userName } = useAuth();
+  const { signOut, userName, userId } = useAuth();
+  const { startAdvertising, stopAdvertising } = useBle();
 
   const [isLoading, setIsLoading]              = useState(true);
   const [isRefreshing, setIsRefreshing]        = useState(false);
@@ -53,6 +55,16 @@ export default function HomeScreen() {
   const [joinClassCode, setJoinClassCode]        = useState('');
   const [isJoining, setIsJoining]                = useState(false);
   
+  // Start broadcasting presence automatically on Home Screen
+  useEffect(() => {
+    if (userId) {
+      startAdvertising(userId);
+    }
+    return () => {
+      stopAdvertising();
+    };
+  }, [userId]);
+
   const fetchTaughtClassrooms = useCallback(async () => {
     try {
       if (!isRefreshing) setIsLoading(true);
@@ -148,6 +160,11 @@ export default function HomeScreen() {
           <View>
             <Text className="text-white text-2xl font-bold">Welcome,</Text>
             <Text className="text-white text-lg opacity-90">{userName || 'User'}</Text>
+            {/* Presence Indicator */}
+            <View className="flex-row items-center mt-1">
+               <Radio size={14} color="#2ECC71" />
+               <Text className="text-[#2ECC71] text-xs font-bold ml-1">Broadcasting Presence</Text>
+            </View>
           </View>
           <View className="relative">
             <TouchableOpacity className="bg-white/20 p-3 rounded-full" onPress={() => setShowLogoutMenu(!showLogoutMenu)}>

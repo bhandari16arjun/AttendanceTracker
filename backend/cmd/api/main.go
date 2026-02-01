@@ -81,6 +81,7 @@ func main() {
 			// Attendance Routes
 			r.Post("/lectures/{lectureID}/attendance-session", apiHandler.CreateAttendanceSession)
 			r.Post("/attendance/mark", apiHandler.MarkAttendance)
+			r.Post("/lectures/{lectureID}/mark-student", apiHandler.MarkStudentAttendance) // New manual mark route
 			
 			// r.Post("/classes/{classID}/leave", apiHandler.LeaveClass)
 

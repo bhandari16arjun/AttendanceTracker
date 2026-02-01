@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from "@/app/context/AuthContext";
+import { BleProvider } from "@/app/context/BleContext";
 import { useColorScheme } from "@/hooks/useColorScheme"; // CORRECTED: Point to the better hook
 
 import "../global.css";
@@ -37,7 +38,9 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <BleProvider>
+        <RootLayoutNav />
+      </BleProvider>
     </AuthProvider>
   );
 }

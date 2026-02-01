@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // !! IMPORTANT !!
 // This should still be your computer's local IP address.
-const API_BASE_URL = 'http://10.125.31.140:3000/api';
+const API_BASE_URL = 'http://10.125.44.240:3000/api';
 
 /**
  * A helper function to create authenticated headers for API requests.

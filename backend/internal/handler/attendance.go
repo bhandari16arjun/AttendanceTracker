@@ -197,3 +197,130 @@ func (h *APIHandler) MarkAttendance(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Attendance marked successfully"})
 }
+
+// MarkStudentAttendance allows an instructor to manually mark a student present.
+func (h *APIHandler) MarkStudentAttendance(w http.ResponseWriter, r *http.Request) {
+	instructorIDHex, _ := r.Context().Value(UserIDContextKey).(string)
+	instructorID, _ := primitive.ObjectIDFromHex(instructorIDHex)
+
+	lectureIDHex := chi.URLParam(r, "lectureID")
+	lectureID, err := primitive.ObjectIDFromHex(lectureIDHex)
+	if err != nil {
+		http.Error(w, `{"error": "Invalid lecture ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		StudentID string `json:"studentId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	studentID, err := primitive.ObjectIDFromHex(req.StudentID)
+	if err != nil {
+		http.Error(w, `{"error": "Invalid student ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 1. Get the lecture to find the classroom ID and verify instructor ownership.
+	lecturesCollection := h.DB.Collection("lectures")
+	var lecture database.Lecture
+	err = lecturesCollection.FindOne(context.TODO(), bson.M{"_id": lectureID}).Decode(&lecture)
+	if err != nil {
+		http.Error(w, `{"error": "Lecture not found"}`, http.StatusNotFound)
+		return
+	}
+	classroomID := lecture.ClassroomID
+
+	classroomsCollection := h.DB.Collection("classrooms")
+	var classroom database.Classroom
+	err = classroomsCollection.FindOne(context.TODO(), bson.M{"_id": classroomID}).Decode(&classroom)
+	if err != nil {
+		http.Error(w, `{"error": "Classroom not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if classroom.InstructorID != instructorID {
+		http.Error(w, `{"error": "Forbidden: You are not the instructor of this class"}`, http.StatusForbidden)
+		return
+	}
+
+	// 2. Verify the student is enrolled.
+	if _, ok := classroom.EnrolledStudents[req.StudentID]; !ok {
+		http.Error(w, `{"error": "Student is not enrolled in this class"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 3. Check for existing attendance.
+	attendanceCollection := h.DB.Collection("attendance_records")
+	count, err := attendanceCollection.CountDocuments(context.TODO(), bson.M{"user_id": studentID, "lecture_id": lectureID})
+	if err != nil {
+		http.Error(w, `{"error": "Database error"}`, http.StatusInternalServerError)
+		return
+	}
+	if count > 0 {
+		// Already marked, just return success to be idempotent
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "Attendance already marked"})
+		return
+	}
+
+	// --- Perform all database updates ---
+
+	// 4. Update Lecture: Add student to the lecture's `attended_by` list.
+	_, err = lecturesCollection.UpdateOne(
+		context.TODO(),
+		bson.M{"_id": lectureID},
+		bson.M{"$addToSet": bson.M{"attended_by": studentID}},
+	)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to update lecture attendance"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 5. Update User: Add the lecture to the user's attendance history for this class.
+	usersCollection := h.DB.Collection("users")
+	_, err = usersCollection.UpdateOne(
+		context.TODO(),
+		bson.M{"_id": studentID},
+		bson.M{"$addToSet": bson.M{"attendance_history." + classroomID.Hex(): lectureID}},
+	)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to update user history"}`, http.StatusInternalServerError)
+		return
+	}
+	
+	// 6. Update Classroom: Increment the student's attended lecture count.
+	_, err = classroomsCollection.UpdateOne(
+		context.TODO(),
+		bson.M{"_id": classroomID},
+		bson.M{"$inc": bson.M{"enrolled_students." + req.StudentID: 1}},
+	)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to update classroom count"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 7. Create the immutable attendance record.
+	// Note: We don't have a session ID here because it's manual, so we can use a placeholder or nil equivalent if allowed.
+	// The struct defines SessionID as primitive.ObjectID, which is not a pointer. We'll generate a new zero one or just use the lecture ID related info.
+	// Or we can just leave it as a new ObjectID.
+	
+	newRecord := database.AttendanceRecord{
+		ID:        primitive.NewObjectID(),
+		UserID:    studentID,
+		LectureID: lectureID,
+		// SessionID: primitive.NilObjectID, // Not available in older drivers, just use zero value or new
+		Timestamp: time.Now(),
+	}
+	_, err = attendanceCollection.InsertOne(context.TODO(), newRecord)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to record attendance"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Attendance marked successfully"})
+}

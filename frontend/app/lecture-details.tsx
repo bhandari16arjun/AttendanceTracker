@@ -1,13 +1,15 @@
 // app/lecture-details.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { ArrowLeft, CheckCircle2, XCircle, QrCode } from 'lucide-react-native';
+import { ArrowLeft, CheckCircle2, XCircle, QrCode, Bluetooth, BluetoothOff, UserCheck, Radio } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cssInterop } from 'nativewind';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '@/services/api';
 import { Classroom, Lecture, User } from '@/types';
+import { useBle } from '@/app/context/BleContext';
+import { useAuth } from '@/app/context/AuthContext';
 
 cssInterop(LinearGradient, {
   className: 'style',
@@ -34,19 +36,25 @@ type StudentWithStatus = {
 export default function LectureDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ classId: string; lectureId: string; }>();
+  const { startScanning, stopScanning, isScanning, devices, startAdvertising, stopAdvertising } = useBle();
+  const { userId } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
   const [classroom, setClassroom] = useState<Classroom | null>(null);
   const [lecture, setLecture] = useState<Lecture | null>(null);
   const [students, setStudents] = useState<StudentWithStatus[]>([]);
 
+  // Filter detected students from BLE devices
+  const detectedStudents = useMemo(() => {
+    const detectedIds = new Set(devices.map(d => d.name)); // device.name === user.id
+    return students.filter(s => detectedIds.has(s.id));
+  }, [devices, students]);
 
   const fetchData = useCallback(async () => {
     if (!params.classId || !params.lectureId) return;
 
     try {
       setIsLoading(true);
-      // Fetch classroom and lecture details in parallel
       const [classRes, lectureRes] = await Promise.all([
         api.getClassroomDetails(params.classId),
         api.getLectureDetails(params.lectureId),
@@ -60,7 +68,6 @@ export default function LectureDetailsScreen() {
       const lectureData: Lecture = await lectureRes.json();
       setLecture(lectureData);
 
-      // Now fetch student names
       if (classData.enrolledStudents) {
         const studentIds = Object.keys(classData.enrolledStudents);
         if (studentIds.length > 0) {
@@ -89,10 +96,35 @@ export default function LectureDetailsScreen() {
     fetchData();
   }, [fetchData]);
 
+  // Handle BLE Scanning Logic for Instructor
+  useEffect(() => {
+    const initScanner = async () => {
+        if (classroom?.instructorId === userId) {
+            // I am the instructor
+            console.log("Switching to scanning mode...");
+            await stopAdvertising(); // Stop broadcasting my own ID
+            setTimeout(() => {
+                 startScanning(); // Start scanning for students
+            }, 500);
+        }
+    };
+    
+    if (classroom && userId) {
+        initScanner();
+    }
+
+    return () => {
+        // Cleanup: Stop scanning and resume broadcasting
+        if (classroom?.instructorId === userId) {
+             console.log("Stopping scan, resuming broadcast...");
+             stopScanning();
+             if (userId) startAdvertising(userId); 
+        }
+    };
+  }, [classroom, userId]);
+
   const handleGenerateQR = () => {
     if (!params.lectureId || !classroom?.name) return;
-    // Simply navigate to the QR scanner page, passing the necessary IDs.
-    // The scanner page will be responsible for generating the token.
     router.push({ 
         pathname: '/qr-scanner', 
         params: { lectureId: params.lectureId, className: classroom.name } 
@@ -115,20 +147,68 @@ export default function LectureDetailsScreen() {
         </View>
       </LinearGradient>
 
-      <View className="p-4">
+      <View className="p-4 space-y-3">
+        {/* QR Code Button */}
         <TouchableOpacity 
-            className="bg-orange-500 rounded-lg p-4 flex-row justify-center items-center shadow mb-4"
+            className="bg-orange-500 rounded-lg p-4 flex-row justify-center items-center shadow"
             onPress={handleGenerateQR}
         >
             <QrCode size={20} color="white" />
             <Text className="text-white font-bold ml-2">Generate QR Code</Text>
         </TouchableOpacity>
+
+        {/* Scan Status Indicator (Only for Instructor) */}
+        {classroom?.instructorId === userId && (
+            <View className="bg-blue-100 rounded-lg p-3 flex-row items-center justify-center border border-blue-200">
+                {isScanning ? (
+                    <>
+                        <ActivityIndicator color="#3498DB" size="small" />
+                        <Text className="text-[#3498DB] font-bold ml-2">Scanning for students...</Text>
+                    </>
+                ) : (
+                    <Text className="text-gray-500">Scanner inactive</Text>
+                )}
+            </View>
+        )}
       </View>
 
       <ScrollView className="flex-1 px-4">
+        
+        {/* DEBUG SECTION - REMOVE LATER */}
+        <View className="bg-yellow-100 p-2 rounded mb-4 border border-yellow-300">
+            <Text className="font-bold text-xs text-yellow-800 uppercase">Debug Info</Text>
+            <Text className="text-xs">Roster Size: {students.length}</Text>
+            <Text className="text-xs">Raw BLE Devices Found: {devices.length}</Text>
+            <View className="mt-1">
+                {devices.map(d => (
+                    <Text key={d.id} className="text-[10px] font-mono text-gray-600">
+                        ID: {d.id} | Name: {d.name || 'N/A'}
+                    </Text>
+                ))}
+            </View>
+        </View>
+
+        {/* Detected Students Section */}
+        {detectedStudents.length > 0 && (
+          <View className="mb-6">
+             <Text className="text-lg font-bold text-[#2C3E50] mb-2 flex-row items-center">
+               <UserCheck size={20} color="#2C3E50" /> Detected Nearby ({detectedStudents.length})
+             </Text>
+             <View className="bg-blue-50 rounded-xl p-2 border border-blue-200">
+               {detectedStudents.map(student => (
+                 <View key={student.id} className="flex-row items-center p-2">
+                    <View className="w-2 h-2 rounded-full bg-green-500 mr-2" />
+                    <Text className="text-blue-900 font-medium">{student.name}</Text>
+                 </View>
+               ))}
+             </View>
+          </View>
+        )}
+
         <Text className="text-lg font-bold text-[#2C3E50] mb-4">
           Student Roster ({students.length})
         </Text>
+
         {isLoading ? (
           <ActivityIndicator size="large" color="#3498DB" />
         ) : students.length === 0 ? (
@@ -147,6 +227,13 @@ export default function LectureDetailsScreen() {
                 <View className="ml-4 flex-1">
                   <Text className="font-semibold text-gray-800">{student.name}</Text>
                   <Text className="text-sm text-gray-500">{student.email}</Text>
+                  
+                  {/* Visual indicator if they are detected nearby */}
+                  {detectedStudents.find(ds => ds.id === student.id) && (
+                     <View className="bg-green-100 self-start px-2 py-0.5 rounded mt-1">
+                        <Text className="text-green-700 text-xs font-bold">Nearby via BLE</Text>
+                     </View>
+                  )}
                 </View>
                 <Text className={`font-bold ${student.status === 'Present' ? 'text-green-600' : 'text-red-600'}`}>
                   {student.status}
